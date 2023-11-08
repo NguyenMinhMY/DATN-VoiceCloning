@@ -6,7 +6,7 @@ from abc import ABC
 
 import torch
 
-from utils.utils import pad_list
+from models.utility.utils import pad_list
 
 
 class LengthRegulator(torch.nn.Module, ABC):
@@ -52,7 +52,9 @@ class LengthRegulator(torch.nn.Module, ABC):
         if ds.sum() == 0:
             ds[ds.sum(dim=1).eq(0)] = 1
 
-        return pad_list([self._repeat_one_sequence(x, d) for x, d in zip(xs, ds)], self.pad_value)
+        return pad_list(
+            [self._repeat_one_sequence(x, d) for x, d in zip(xs, ds)], self.pad_value
+        )
 
     def _repeat_one_sequence(self, x, d):
         """

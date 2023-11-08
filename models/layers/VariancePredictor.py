@@ -6,8 +6,8 @@ from abc import ABC
 
 import torch
 
-from layers.ConditionalLayerNorm import ConditionalLayerNorm
-from layers.LayerNorm import LayerNorm
+from models.layers.common.ConditionalLayerNorm import ConditionalLayerNorm
+from models.layers.common.LayerNorm import LayerNorm
 
 
 class VariancePredictor(torch.nn.Module, ABC):
@@ -22,7 +22,16 @@ class VariancePredictor(torch.nn.Module, ABC):
 
     """
 
-    def __init__(self, idim, n_layers=2, n_chans=384, kernel_size=3, bias=True, dropout_rate=0.5, utt_embed_dim=None):
+    def __init__(
+        self,
+        idim,
+        n_layers=2,
+        n_chans=384,
+        kernel_size=3,
+        bias=True,
+        dropout_rate=0.5,
+        utt_embed_dim=None,
+    ):
         """
         Initialize duration predictor module.
 
@@ -40,10 +49,25 @@ class VariancePredictor(torch.nn.Module, ABC):
 
         for idx in range(n_layers):
             in_chans = idim if idx == 0 else n_chans
-            self.conv += [torch.nn.Sequential(torch.nn.Conv1d(in_chans, n_chans, kernel_size, stride=1, padding=(kernel_size - 1) // 2, bias=bias, ),
-                                              torch.nn.ReLU())]
+            self.conv += [
+                torch.nn.Sequential(
+                    torch.nn.Conv1d(
+                        in_chans,
+                        n_chans,
+                        kernel_size,
+                        stride=1,
+                        padding=(kernel_size - 1) // 2,
+                        bias=bias,
+                    ),
+                    torch.nn.ReLU(),
+                )
+            ]
             if utt_embed_dim is not None:
-                self.norms += [ConditionalLayerNorm(normal_shape=n_chans, speaker_embedding_dim=utt_embed_dim, dim=1)]
+                self.norms += [
+                    ConditionalLayerNorm(
+                        normal_shape=n_chans, speaker_embedding_dim=utt_embed_dim, dim=1
+                    )
+                ]
             else:
                 self.norms += [LayerNorm(n_chans, dim=1)]
             self.dropouts += [torch.nn.Dropout(dropout_rate)]

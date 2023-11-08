@@ -1,7 +1,8 @@
 import torch
 
-from layers.ConditionalLayerNorm import ConditionalLayerNorm
-from layers.LayerNorm import LayerNorm
+from models.layers.common.ConditionalLayerNorm import ConditionalLayerNorm
+from models.layers.common.LayerNorm import LayerNorm
+
 
 class DurationPredictor(torch.nn.Module):
     """
@@ -23,7 +24,16 @@ class DurationPredictor(torch.nn.Module):
 
     """
 
-    def __init__(self, idim, n_layers=2, n_chans=384, kernel_size=3, dropout_rate=0.1, offset=1.0, utt_embed_dim=None):
+    def __init__(
+        self,
+        idim,
+        n_layers=2,
+        n_chans=384,
+        kernel_size=3,
+        dropout_rate=0.1,
+        offset=1.0,
+        utt_embed_dim=None,
+    ):
         """
         Initialize duration predictor module.
 
@@ -44,10 +54,24 @@ class DurationPredictor(torch.nn.Module):
 
         for idx in range(n_layers):
             in_chans = idim if idx == 0 else n_chans
-            self.conv += [torch.nn.Sequential(torch.nn.Conv1d(in_chans, n_chans, kernel_size, stride=1, padding=(kernel_size - 1) // 2, ),
-                                              torch.nn.ReLU())]
+            self.conv += [
+                torch.nn.Sequential(
+                    torch.nn.Conv1d(
+                        in_chans,
+                        n_chans,
+                        kernel_size,
+                        stride=1,
+                        padding=(kernel_size - 1) // 2,
+                    ),
+                    torch.nn.ReLU(),
+                )
+            ]
             if utt_embed_dim is not None:
-                self.norms += [ConditionalLayerNorm(normal_shape=n_chans, speaker_embedding_dim=utt_embed_dim, dim=1)]
+                self.norms += [
+                    ConditionalLayerNorm(
+                        normal_shape=n_chans, speaker_embedding_dim=utt_embed_dim, dim=1
+                    )
+                ]
             else:
                 self.norms += [LayerNorm(n_chans, dim=1)]
             self.dropouts += [torch.nn.Dropout(dropout_rate)]
@@ -70,7 +94,9 @@ class DurationPredictor(torch.nn.Module):
 
         if is_inference:
             # NOTE: since we learned to predict in the log domain, we have to invert the log during inference.
-            xs = torch.clamp(torch.round(xs.exp() - self.offset), min=0).long()  # avoid negative value
+            xs = torch.clamp(
+                torch.round(xs.exp() - self.offset), min=0
+            ).long()  # avoid negative value
         else:
             xs = xs.masked_fill(x_masks, 0.0)
 
@@ -105,4 +131,3 @@ class DurationPredictor(torch.nn.Module):
 
         """
         return self._forward(xs, padding_mask, True, utt_embed=utt_embed)
-    
