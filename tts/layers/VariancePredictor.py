@@ -6,8 +6,8 @@ from abc import ABC
 
 import torch
 
-from models.layers.common.ConditionalLayerNorm import ConditionalLayerNorm
-from models.layers.common.LayerNorm import LayerNorm
+from tts.layers.common.ConditionalLayerNorm import ConditionalLayerNorm
+from tts.layers.common.LayerNorm import LayerNorm
 
 
 class VariancePredictor(torch.nn.Module, ABC):

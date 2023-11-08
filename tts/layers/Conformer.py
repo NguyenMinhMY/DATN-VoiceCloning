@@ -4,14 +4,14 @@ Taken from ESPNet
 
 import torch
 
-from models.layers.common.Attention import RelPositionMultiHeadedAttention
-from models.layers.common.Convolution import ConvolutionModule
-from models.layers.common.EncoderLayer import EncoderLayer
-from models.layers.common.LayerNorm import LayerNorm
-from models.layers.common.MultiLayeredConv1d import MultiLayeredConv1d
-from models.layers.common.MultiSequential import repeat
-from models.layers.common.PositionalEncoding import RelPositionalEncoding
-from models.layers.common.Swish import Swish
+from tts.layers.common.Attention import RelPositionMultiHeadedAttention
+from tts.layers.common.Convolution import ConvolutionModule
+from tts.layers.common.EncoderLayer import EncoderLayer
+from tts.layers.common.LayerNorm import LayerNorm
+from tts.layers.common.MultiLayeredConv1d import MultiLayeredConv1d
+from tts.layers.common.MultiSequential import repeat
+from tts.layers.common.PositionalEncoding import RelPositionalEncoding
+from tts.layers.common.Swish import Swish
 
 
 class Conformer(torch.nn.Module):

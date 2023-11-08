@@ -12,10 +12,10 @@ import torch
 import torch.multiprocessing
 from matplotlib.lines import Line2D
 
-from models.layers.common import ConditionalLayerNorm
+from tts.layers.common import ConditionalLayerNorm
 
-from models.utility.TextFrontend import ArticulatoryCombinedTextFrontend
-from models.utility.TextFrontend import get_language_id
+from tts.utility.tokenizer import ArticulatoryCombinedTextFrontend
+from tts.utility.tokenizer import get_language_id
 
 
 def float2pcm(sig, dtype="int16"):

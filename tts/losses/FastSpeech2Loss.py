@@ -4,8 +4,8 @@ Taken from ESPNet
 
 import torch
 
-from models.losses.DurationPredictorLoss import DurationPredictorLoss
-from models.utility.utils import make_non_pad_mask
+from tts.losses.DurationPredictorLoss import DurationPredictorLoss
+from tts.utility.utils import make_non_pad_mask
 
 
 def weights_nonzero_speech(target):

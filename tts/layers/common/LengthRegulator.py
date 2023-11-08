@@ -6,7 +6,7 @@ from abc import ABC
 
 import torch
 
-from models.utility.utils import pad_list
+from tts.utility.utils import pad_list
 
 
 class LengthRegulator(torch.nn.Module, ABC):

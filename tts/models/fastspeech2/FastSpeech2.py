@@ -6,19 +6,19 @@ from abc import ABC
 
 import torch
 
-from models.layers.Conformer import Conformer
-from models.layers.DurationPredictor import DurationPredictor
-from models.layers.PostNet import PostNet
-from models.layers.VariancePredictor import VariancePredictor
+from tts.layers.Conformer import Conformer
+from tts.layers.DurationPredictor import DurationPredictor
+from tts.layers.PostNet import PostNet
+from tts.layers.VariancePredictor import VariancePredictor
 
-from models.layers.common.LengthRegulator import LengthRegulator
+from tts.layers.common.LengthRegulator import LengthRegulator
 
-from models.utility.articulatory_features import get_feature_to_index_lookup
-from models.utility.utils import initialize
-from models.utility.utils import make_non_pad_mask
-from models.utility.utils import make_pad_mask
+from tts.utility.articulatory_features import get_feature_to_index_lookup
+from tts.utility.utils import initialize
+from tts.utility.utils import make_non_pad_mask
+from tts.utility.utils import make_pad_mask
 
-from models.losses.FastSpeech2Loss import FastSpeech2Loss
+from tts.losses.FastSpeech2Loss import FastSpeech2Loss
 
 
 class FastSpeech2(torch.nn.Module, ABC):
