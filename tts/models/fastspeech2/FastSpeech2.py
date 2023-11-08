@@ -13,10 +13,10 @@ from tts.layers.VariancePredictor import VariancePredictor
 
 from tts.layers.common.LengthRegulator import LengthRegulator
 
-from tts.utility.articulatory_features import get_feature_to_index_lookup
-from tts.utility.utils import initialize
-from tts.utility.utils import make_non_pad_mask
-from tts.utility.utils import make_pad_mask
+from utility.articulatory_features import get_feature_to_index_lookup
+from utility.utils import initialize
+from utility.utils import make_non_pad_mask
+from utility.utils import make_pad_mask
 
 from tts.losses.FastSpeech2Loss import FastSpeech2Loss
 

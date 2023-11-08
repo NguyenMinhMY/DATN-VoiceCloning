@@ -10,7 +10,7 @@ import numpy
 import torch
 from torch import nn
 
-from tts.utility.utils import make_non_pad_mask
+from utility.utils import make_non_pad_mask
 
 
 class MultiHeadedAttention(nn.Module):

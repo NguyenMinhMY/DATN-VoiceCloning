@@ -14,8 +14,8 @@ from matplotlib.lines import Line2D
 
 from tts.layers.common import ConditionalLayerNorm
 
-from tts.utility.tokenizer import ArticulatoryCombinedTextFrontend
-from tts.utility.tokenizer import get_language_id
+from utility.tokenizer import ArticulatoryCombinedTextFrontend
+from utility.tokenizer import get_language_id
 
 
 def float2pcm(sig, dtype="int16"):

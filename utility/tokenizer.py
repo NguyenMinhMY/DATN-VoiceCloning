@@ -9,9 +9,9 @@ from dragonmapper.transcriptions import pinyin_to_ipa
 from phonemizer.backend import EspeakBackend
 from pypinyin import pinyin
 
-from tts.utility.articulatory_features import generate_feature_table
-from tts.utility.articulatory_features import get_feature_to_index_lookup
-from tts.utility.articulatory_features import get_phone_to_id
+from utility.articulatory_features import generate_feature_table
+from utility.articulatory_features import get_feature_to_index_lookup
+from utility.articulatory_features import get_phone_to_id
 
 
 class ArticulatoryCombinedTextFrontend:

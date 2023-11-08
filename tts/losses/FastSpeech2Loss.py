@@ -5,7 +5,7 @@ Taken from ESPNet
 import torch
 
 from tts.losses.DurationPredictorLoss import DurationPredictorLoss
-from tts.utility.utils import make_non_pad_mask
+from utility.utils import make_non_pad_mask
 
 
 def weights_nonzero_speech(target):
