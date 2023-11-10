@@ -261,6 +261,7 @@ class FastSpeechDataset(Dataset):
         )
 
     def __getitem__(self, index):
+        speaker_id = os.path.basename(self.datapoints[index][8]).split('-')[0]
         return (
             self.datapoints[index][0],
             self.datapoints[index][1],
@@ -271,6 +272,7 @@ class FastSpeechDataset(Dataset):
             self.datapoints[index][6],
             self.datapoints[index][7],
             self.language_id,
+            speaker_id
         )
 
     def __len__(self):
@@ -281,3 +283,16 @@ class FastSpeechDataset(Dataset):
             self.datapoints.pop(remove_id)
         torch.save(self.datapoints, os.path.join(self.cache_dir, "fast_train_cache.pt"))
         print("Dataset updated!")
+
+
+class Miniset(Dataset):
+    def __init__(self, total_dataset: FastSpeechDataset, speakerID: str) -> None:
+        super().__init__()
+        self._speakerID = speakerID 
+        self.dataset = list(filter(lambda x: x[-1] == self._speakerID, total_dataset))     
+    
+    def __getitem__(self, index):
+        return self.dataset[index]
+    
+    def __len__(self):
+        return len(self.dataset)

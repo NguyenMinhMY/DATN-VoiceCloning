@@ -19,7 +19,7 @@ from utility.utils import plot_progress_spec
 
 
 def collate_and_pad(batch):
-    # text, text_len, speech, speech_len, durations, energy, pitch, utterance condition, language_id
+    # text, text_len, speech, speech_len, durations, energy, pitch, utterance condition, language_id, speaker_id
     return (
         pad_sequence([datapoint[0] for datapoint in batch], batch_first=True),
         torch.stack([datapoint[1] for datapoint in batch]).squeeze(1),
@@ -29,7 +29,8 @@ def collate_and_pad(batch):
         pad_sequence([datapoint[5] for datapoint in batch], batch_first=True),
         pad_sequence([datapoint[6] for datapoint in batch], batch_first=True),
         None,
-        torch.stack([datapoint[8] for datapoint in batch]),
+        torch.stack([datapoint[8] for datapoint in batch]), 
+        [datapoint[9] for datapoint in batch],
     )
 
 
@@ -69,7 +70,7 @@ def train_loop(
             DataLoader(
                 batch_size=batch_size,
                 dataset=dataset,
-                drop_last=True,
+                drop_last=True, 
                 num_workers=4,
                 pin_memory=True,
                 shuffle=True,

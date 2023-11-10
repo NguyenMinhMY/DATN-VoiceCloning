@@ -82,7 +82,6 @@ def plot_progress_spec(
             return_duration_pitch_energy=True,
             utterance_embedding=default_emb,
             lang_id=get_language_id(lang).to(device),
-            run_postflow=run_postflow,
         )
     else:
         spec, durations, pitch, energy = net.inference(
