@@ -5,6 +5,8 @@ from glob import glob
 import torch
 from torch.utils.data import Dataset
 from tqdm import tqdm
+import soundfile as sf
+from numpy import trim_zeros
 
 from src.utility.tokenizer import get_language_id
 from src.utility.articulatory_features import get_feature_to_index_lookup
@@ -13,6 +15,7 @@ from src.utility.energy_calculator import EnergyCalculator
 from src.utility.pitch_calculator import Parselmouth
 from src.aligner.Aligner import Aligner
 from src.aligner.AlignerDataset import AlignerDataset
+from src.preprocessing.audio_processing import AudioPreprocessor
 
 
 def build_path_to_transcript_dict_libri_tts(
@@ -115,9 +118,26 @@ class FastSpeechDataset(Dataset):
             dc = DurationCalculator(reduction_factor=reduction_factor)
             vis_dir = os.path.join(cache_dir, "duration_vis")
             os.makedirs(vis_dir, exist_ok=True)
+            
+            _, sr = sf.read(filepaths[0])
+            ap = AudioPreprocessor(
+                input_sr=sr,
+                output_sr=16000,
+                melspec_buckets=80,
+                hop_length=256,
+                n_fft=1024,
+                cut_silence=cut_silence,
+                device=device,
+            )
 
             for index in tqdm(range(len(dataset))):
-                norm_wave = norm_waves[index]
+                # norm_wave = norm_waves[index]
+                path_to_audio =  filepaths[index]
+                wave, _ = sf.read(path_to_audio)
+
+                norm_wave = ap.audio_to_wave_tensor(normalize=True, audio=wave)
+                norm_wave = torch.tensor(trim_zeros(norm_wave.numpy()))
+
                 norm_wave_length = torch.LongTensor([len(norm_wave)])
 
                 if len(norm_wave) / 16000 < min_len_in_seconds and ctc_selection:
@@ -214,7 +234,7 @@ class FastSpeechDataset(Dataset):
                         cached_duration.cpu(),
                         cached_energy,
                         cached_pitch,
-                        prosodic_condition,
+                        prosodic_condition, 
                         filepaths[index],
                     ]
                 )

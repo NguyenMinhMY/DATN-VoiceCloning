@@ -99,7 +99,7 @@ class AlignerDataset(Dataset):
             # issues. Now that the multi-processing is over, we can convert them back
             # to tensors to save on conversions in the future.
             print("Converting into convenient format...")
-            norm_waves = list()
+            # norm_waves = list()
             filepaths = list()
             for datapoint in tqdm(self.datapoints):
                 tensored_datapoints.append(
@@ -110,37 +110,42 @@ class AlignerDataset(Dataset):
                         torch.LongTensor(datapoint[3]),
                     ]
                 )
-                norm_waves.append(torch.Tensor(datapoint[-2]))
+                # norm_waves.append(torch.Tensor(datapoint[-2]))
                 filepaths.append(datapoint[-1])
 
             self.datapoints = tensored_datapoints
 
             # add speaker embeddings
-            self.speaker_embeddings = list()
-            speaker_embedding_func_ecapa = EncoderClassifier.from_hparams(
-                source="speechbrain/spkrec-ecapa-voxceleb",
-                run_opts={"device": str(device)},
-                savedir=os.path.join(
-                    "Models/SpeakerEmbedding/speechbrain_speaker_embedding_ecapa"
-                ),
-            )
-            with torch.no_grad():
-                for wave in tqdm(norm_waves):
-                    self.speaker_embeddings.append(
-                        speaker_embedding_func_ecapa.encode_batch(
-                            wavs=wave.to(device).unsqueeze(0)
-                        )
-                        .squeeze()
-                        .cpu()
-                    )
+            
+            # self.speaker_embeddings = list()
+            # speaker_embedding_func_ecapa = EncoderClassifier.from_hparams(
+            #     source="speechbrain/spkrec-ecapa-voxceleb",
+            #     run_opts={"device": str(device)},
+            #     savedir=os.path.join(
+            #         "Models/SpeakerEmbedding/speechbrain_speaker_embedding_ecapa"
+            #     ),
+            # )
+            # with torch.no_grad():
+            #     for wave in tqdm(norm_waves):
+            #         self.speaker_embeddings.append(
+            #             speaker_embedding_func_ecapa.encode_batch(
+            #                 wavs=wave.to(device).unsqueeze(0)
+            #             )
+            #             .squeeze()
+            #             .cpu()
+            #         )
 
             # save to cache
             if len(self.datapoints) == 0:
                 raise RuntimeError
+            # torch.save(
+            #     (self.datapoints, norm_waves, self.speaker_embeddings, filepaths),
+            #     os.path.join(cache_dir, "aligner_train_cache.pt"),
+            # )
             torch.save(
-                (self.datapoints, norm_waves, self.speaker_embeddings, filepaths),
+                (self.datapoints, None, None, filepaths),
                 os.path.join(cache_dir, "aligner_train_cache.pt"),
-            )
+            )            
         else:
             # just load the datapoints from cache
             self.datapoints = torch.load(
@@ -202,6 +207,7 @@ class AlignerDataset(Dataset):
                         "ignore"
                     )  # otherwise we get tons of warnings about an RNN not being in contiguous chunks
                     norm_wave = ap.audio_to_wave_tensor(normalize=True, audio=wave)
+                    
             except ValueError:
                 continue
             dur_in_seconds = len(norm_wave) / 16000
@@ -259,7 +265,8 @@ class AlignerDataset(Dataset):
                     cached_text_len,
                     cached_speech,
                     cached_speech_len,
-                    norm_wave.cpu().detach().numpy(),
+                    # norm_wave.cpu().detach().numpy(),
+                    None,
                     path,
                 ]
             )
@@ -269,13 +276,19 @@ class AlignerDataset(Dataset):
         text_vector = self.datapoints[index][0]
         tokens = self.tf.text_vectors_to_id_sequence(text_vector=text_vector)
         tokens = torch.LongTensor(tokens)
+        # return (
+        #     tokens,
+        #     torch.LongTensor([len(tokens)]),
+        #     self.datapoints[index][2],
+        #     self.datapoints[index][3],
+        #     self.speaker_embeddings[index],
+        # )
         return (
             tokens,
             torch.LongTensor([len(tokens)]),
             self.datapoints[index][2],
             self.datapoints[index][3],
-            self.speaker_embeddings[index],
+            None,    
         )
-
     def __len__(self):
         return len(self.datapoints)
