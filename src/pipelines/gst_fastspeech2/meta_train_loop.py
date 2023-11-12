@@ -113,19 +113,16 @@ def train_loop(
     # Actual train loop starts here
     # =============================
     for step in tqdm(range(step_counter, steps)):
-        batches = []
+        train_loss = 0.0
+        cycle_loss = 0.0
         for index in random.sample(list(range(len(datasets))), len(datasets)):
             # we get one batch for each task (i.e. language in this case) in a randomized order
             try:
                 batch = next(train_iters[index])
-                batches.append(batch)
             except StopIteration:
                 train_iters[index] = iter(train_loaders[index])
                 batch = next(train_iters[index])
-                batches.append(batch)
-        train_loss = 0.0
-        cycle_loss = 0.0
-        for batch in batches:
+            
             with autocast():
                 if step <= phase_1_steps:
                     # PHASE 1
