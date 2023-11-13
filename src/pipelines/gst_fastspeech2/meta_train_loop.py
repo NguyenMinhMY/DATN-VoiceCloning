@@ -53,6 +53,9 @@ def train_loop(
     # ============
     # Preparations
     # ============
+    
+    os.makedirs(save_directory, exist_ok=True)
+
     steps = phase_1_steps + phase_2_steps
     net = net.to(device)
 
@@ -96,6 +99,10 @@ def train_loop(
     step_counter = 0
     train_losses_total = list()
     cycle_losses_total = list()
+
+    best_train_loss = float("inf")
+    best_cycle_loss = float("inf")
+
     if path_to_checkpoint is not None:
         check_dict = torch.load(os.path.join(path_to_checkpoint), map_location=device)
         net.load_state_dict(check_dict["model"])
@@ -115,6 +122,8 @@ def train_loop(
     for step in tqdm(range(step_counter, steps)):
         train_loss = 0.0
         cycle_loss = 0.0
+
+
         for index in random.sample(list(range(len(datasets))), len(datasets)):
             # we get one batch for each task (i.e. language in this case) in a randomized order
             try:
@@ -221,17 +230,48 @@ def train_loop(
                 print(
                     f"Cycle Loss: {round(sum(cycle_losses_total) / len(cycle_losses_total), 3)}"
                 )
-            torch.save(
-                {
-                    "model": net.state_dict(),
-                    "optimizer": optimizer.state_dict(),
-                    "scaler": grad_scaler.state_dict(),
-                    "scheduler": scheduler.state_dict(),
-                    "step_counter": step,
-                    "default_emb": default_embedding,
-                },
-                os.path.join(save_directory, "checkpoint_{}.pt".format(step)),
-            )
+            # Save the best model based on the train loss
+            if train_loss < best_train_loss:
+                best_train_loss = train_loss
+                torch.save(
+                    {
+                        "model": net.state_dict(),
+                        "optimizer": optimizer.state_dict(),
+                        "scaler": grad_scaler.state_dict(),
+                        "scheduler": scheduler.state_dict(),
+                        "step_counter": step,
+                        "default_emb": default_embedding,
+                    },
+                    os.path.join(save_directory, "checkpoint_best_train_loss.pt"),
+                )
+            # Save the best model based on the cycle loss
+            if cycle_loss < best_cycle_loss:
+                best_cycle_loss = cycle_loss
+                torch.save(
+                    {
+                        "model": net.state_dict(),
+                        "optimizer": optimizer.state_dict(),
+                        "scaler": grad_scaler.state_dict(),
+                        "scheduler": scheduler.state_dict(),
+                        "step_counter": step,
+                        "default_emb": default_embedding,
+                    },
+                    os.path.join(save_directory, "checkpoint_best_cycle_loss.pt"),
+                )
+            # Save the lastest model
+            if step == steps - 1:
+                torch.save(
+                    {
+                        "model": net.state_dict(),
+                        "optimizer": optimizer.state_dict(),
+                        "scaler": grad_scaler.state_dict(),
+                        "scheduler": scheduler.state_dict(),
+                        "step_counter": step,
+                        "default_emb": default_embedding,
+                    },
+                    os.path.join(save_directory, "checkpoint_lastest.pt"),
+                )
+
             delete_old_checkpoints(save_directory, keep=5)
             path_to_most_recent_plot = plot_progress_spec(
                 net=net,
