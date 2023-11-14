@@ -65,21 +65,22 @@ def train_loop(
     style_embedding_function.eval()
     style_embedding_function.requires_grad_(False)
 
-    torch.multiprocessing.set_sharing_strategy("file_system")
+    # torch.multiprocessing.set_sharing_strategy("file_system")
     train_loaders = list()
     train_iters = list()
-    for dataset in datasets:
+    print('> Creating dataloader')
+    for dataset in tqdm(datasets):
         train_loaders.append(
             DataLoader(
                 batch_size=batch_size,
                 dataset=dataset,
                 drop_last=True, 
-                num_workers=4,
-                pin_memory=True,
+                num_workers=1, #
+                pin_memory=False, #
                 shuffle=True,
-                prefetch_factor=5,
+                prefetch_factor=1, #
                 collate_fn=collate_and_pad,
-                persistent_workers=True,
+                persistent_workers=False, #
             )
         )
         train_iters.append(iter(train_loaders[-1]))
