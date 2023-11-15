@@ -40,7 +40,7 @@ def train_loop(
     device,
     save_directory,
     batch_size=32,
-    epochs_per_save=1,
+    steps_per_save=500,
     lang="en",
     lr=0.0001,
     warmup_steps=4000,
@@ -71,32 +71,33 @@ def train_loop(
         path_to_embed_model: path to the pretrained embedding function
     """
 
-    steps = phase_1_steps + phase_2_steps
+    os.makedirs(save_directory, exist_ok=True)
 
+    steps = phase_1_steps + phase_2_steps
     net = net.to(device)
+
     style_embedding_function = StyleEmbedding().to(device)
     check_dict = torch.load(path_to_embed_model, map_location=device)
     style_embedding_function.load_state_dict(check_dict["style_emb_func"])
     style_embedding_function.eval()
     style_embedding_function.requires_grad_(False)
 
-    torch.multiprocessing.set_sharing_strategy("file_system")
+    # torch.multiprocessing.set_sharing_strategy("file_system")
     train_loader = DataLoader(
         batch_size=batch_size,
         dataset=train_dataset,
         drop_last=True,
-        num_workers=8 if os.cpu_count() > 8 else max(os.cpu_count() - 2, 1),
-        pin_memory=True,
+        num_workers=1,
+        pin_memory=False,
         shuffle=True,
-        prefetch_factor=8,
+        prefetch_factor=1,
         collate_fn=collate_and_pad,
-        persistent_workers=True,
+        persistent_workers=False,
     )
-    step_counter = 0
-    optimizer = torch.optim.Adam(net.parameters(), lr=lr)
+    optimizer = torch.optim.Adam(net.parameters(), lr=lr, eps=1.0e-06, weight_decay=0.0)
     scheduler = WarmupScheduler(optimizer, warmup_steps=warmup_steps)
     scaler = GradScaler()
-    epoch = 0
+
     if resume:
         path_to_checkpoint = get_most_recent_checkpoint(checkpoint_dir=save_directory)
     if path_to_checkpoint is not None:
@@ -107,11 +108,17 @@ def train_loop(
             scheduler.load_state_dict(check_dict["scheduler"])
             step_counter = check_dict["step_counter"]
             scaler.load_state_dict(check_dict["scaler"])
+
     start_time = time.time()
-    while True:
-        net.train()
-        epoch += 1
-        optimizer.zero_grad()
+    net.train()
+
+    best_train_loss = float("inf")
+    best_cycle_loss = float("inf")
+
+    for step_counter in range(steps):
+        train_loss = 0.0
+        cycle_loss = 0.0
+
         train_losses_this_epoch = list()
         cycle_losses_this_epoch = list()
         for batch in tqdm(train_loader):
@@ -182,13 +189,12 @@ def train_loop(
 
                     train_losses_this_epoch.append(train_loss.item())
                     cycle_losses_this_epoch.append(cycle_dist.item())
+
                     train_loss = train_loss + cycle_dist
 
             optimizer.zero_grad()
-
             scaler.scale(train_loss).backward()
-            del train_loss
-            step_counter += 1
+
             scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(
                 net.parameters(), 1.0, error_if_nonfinite=False
@@ -197,26 +203,60 @@ def train_loop(
             scaler.update()
             scheduler.step()
 
+        step_counter += 1
+
         net.eval()
         style_embedding_function.eval()
-        if epoch % epochs_per_save == 0:
+        if step_counter % steps_per_save == 0 and step_counter != 0:
             default_embedding = style_embedding_function(
                 batch_of_spectrograms=train_dataset[0][2].unsqueeze(0).to(device),
                 batch_of_spectrogram_lengths=train_dataset[0][3]
                 .unsqueeze(0)
                 .to(device),
             ).squeeze()
-            torch.save(
-                {
-                    "model": net.state_dict(),
-                    "optimizer": optimizer.state_dict(),
-                    "step_counter": step_counter,
-                    "scaler": scaler.state_dict(),
-                    "scheduler": scheduler.state_dict(),
-                    "default_emb": default_embedding,
-                },
-                os.path.join(save_directory, "checkpoint_{}.pt".format(step_counter)),
-            )
+
+            # Save the best model based on the train loss
+            if train_loss < best_train_loss:
+                best_train_loss = train_loss
+                torch.save(
+                    {
+                        "model": net.state_dict(),
+                        "optimizer": optimizer.state_dict(),
+                        "scaler": scaler.state_dict(),
+                        "scheduler": scheduler.state_dict(),
+                        "step_counter": step_counter,
+                        "default_emb": default_embedding,
+                    },
+                    os.path.join(save_directory, "checkpoint_best_train_loss.pt"),
+                )
+            # Save the best model based on the cycle loss
+            if cycle_loss < best_cycle_loss:
+                best_cycle_loss = cycle_loss
+                torch.save(
+                    {
+                        "model": net.state_dict(),
+                        "optimizer": optimizer.state_dict(),
+                        "scaler": scaler.state_dict(),
+                        "scheduler": scheduler.state_dict(),
+                        "step_counter": step_counter,
+                        "default_emb": default_embedding,
+                    },
+                    os.path.join(save_directory, "checkpoint_best_cycle_loss.pt"),
+                )
+            # Save the lastest model
+            if step_counter == steps - 1:
+                torch.save(
+                    {
+                        "model": net.state_dict(),
+                        "optimizer": optimizer.state_dict(),
+                        "scaler": scaler.state_dict(),
+                        "scheduler": scheduler.state_dict(),
+                        "step_counter": step_counter,
+                        "default_emb": default_embedding,
+                    },
+                    os.path.join(save_directory, "checkpoint_lastest.pt"),
+                )
+
             delete_old_checkpoints(save_directory, keep=5)
             path_to_most_recent_plot = plot_progress_spec(
                 net,
@@ -226,26 +266,25 @@ def train_loop(
                 lang=lang,
                 default_emb=default_embedding,
             )
-            if use_wandb:
-                wandb.log({"progress_plot": wandb.Image(path_to_most_recent_plot)})
-        print("Epoch:              {}".format(epoch))
+
+        print(f"\nSteps: {step_counter}")
         print(
-            "Spectrogram Loss:   {}".format(
+            "Spectrogram Loss: {}".format(
                 sum(train_losses_this_epoch) / len(train_losses_this_epoch)
             )
         )
+
         if len(cycle_losses_this_epoch) != 0:
             print(
-                "Cycle Loss:         {}".format(
+                "Cycle Loss: {}".format(
                     sum(cycle_losses_this_epoch) / len(cycle_losses_this_epoch)
                 )
             )
+
         print(
-            "Time elapsed:       {} Minutes".format(
-                round((time.time() - start_time) / 60)
-            )
+            "Time elapsed:  {} Minutes".format(round((time.time() - start_time) / 60))
         )
-        print("Steps:              {}".format(step_counter))
+
         if use_wandb:
             wandb.log(
                 {
@@ -256,9 +295,8 @@ def train_loop(
                     if len(cycle_losses_this_epoch) != 0
                     else 0.0,
                     "Steps": step_counter,
+                    "progress_plot": wandb.Image(path_to_most_recent_plot),
                 }
             )
-        if step_counter > steps and epoch % epochs_per_save == 0:
-            # DONE
-            return
+
         net.train()
