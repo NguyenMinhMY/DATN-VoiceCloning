@@ -109,13 +109,14 @@ def train_loop(
             step_counter = check_dict["step_counter"]
             scaler.load_state_dict(check_dict["scaler"])
 
-    start_time = time.time()
     net.train()
 
     best_train_loss = float("inf")
     best_cycle_loss = float("inf")
 
     for step_counter in range(steps):
+        start_time = time.time()
+
         train_loss = 0.0
         cycle_loss = 0.0
 
