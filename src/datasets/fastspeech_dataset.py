@@ -292,7 +292,8 @@ class FastSpeechDataset(Dataset):
             self.datapoints[index][6],
             self.datapoints[index][7],
             self.language_id,
-            speaker_id
+            speaker_id,
+            self.datapoints[index][8]
         )
 
     def __len__(self):
