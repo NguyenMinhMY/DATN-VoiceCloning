@@ -97,7 +97,7 @@ def train_loop(
     optimizer = torch.optim.Adam(net.parameters(), lr=lr, eps=1.0e-06, weight_decay=0.0)
     scheduler = WarmupScheduler(optimizer, warmup_steps=warmup_steps)
     scaler = GradScaler()
-
+    step_counter = 0
     if resume:
         path_to_checkpoint = get_most_recent_checkpoint(checkpoint_dir=save_directory)
     if path_to_checkpoint is not None:
@@ -114,11 +114,8 @@ def train_loop(
     best_train_loss = float("inf")
     best_cycle_loss = float("inf")
 
-    for step_counter in range(steps):
+    for step_counter in range(step_counter + 1, steps + 1):
         start_time = time.time()
-
-        train_loss = 0.0
-        cycle_loss = 0.0
 
         train_losses_this_epoch = list()
         cycle_losses_this_epoch = list()
@@ -204,11 +201,9 @@ def train_loop(
             scaler.update()
             scheduler.step()
 
-        step_counter += 1
-
         net.eval()
         style_embedding_function.eval()
-        if step_counter % steps_per_save == 0 and step_counter != 0:
+        if step_counter % steps_per_save == 0 and step_counter != 1:
             default_embedding = style_embedding_function(
                 batch_of_spectrograms=train_dataset[0][2].unsqueeze(0).to(device),
                 batch_of_spectrogram_lengths=train_dataset[0][3]
@@ -217,8 +212,9 @@ def train_loop(
             ).squeeze()
 
             # Save the best model based on the train loss
-            if train_loss < best_train_loss:
-                best_train_loss = train_loss
+            train_loss_epoch = sum(train_losses_this_epoch) / len(train_losses_this_epoch)
+            if train_loss_epoch < best_train_loss:
+                best_train_loss = train_loss_epoch
                 torch.save(
                     {
                         "model": net.state_dict(),
@@ -231,8 +227,9 @@ def train_loop(
                     os.path.join(save_directory, "checkpoint_best_train_loss.pt"),
                 )
             # Save the best model based on the cycle loss
-            if cycle_loss < best_cycle_loss:
-                best_cycle_loss = cycle_loss
+            cycle_loss_epoch = sum(cycle_losses_this_epoch) / len(cycle_losses_this_epoch) if len(cycle_losses_this_epoch) > 0 else 0.0
+            if cycle_loss_epoch < best_cycle_loss and cycle_loss_epoch != 0.0:
+                best_cycle_loss = cycle_loss_epoch
                 torch.save(
                     {
                         "model": net.state_dict(),
@@ -245,18 +242,17 @@ def train_loop(
                     os.path.join(save_directory, "checkpoint_best_cycle_loss.pt"),
                 )
             # Save the lastest model
-            if step_counter == steps - 1:
-                torch.save(
-                    {
-                        "model": net.state_dict(),
-                        "optimizer": optimizer.state_dict(),
-                        "scaler": scaler.state_dict(),
-                        "scheduler": scheduler.state_dict(),
-                        "step_counter": step_counter,
-                        "default_emb": default_embedding,
-                    },
-                    os.path.join(save_directory, "checkpoint_lastest.pt"),
-                )
+            torch.save(
+                {
+                    "model": net.state_dict(),
+                    "optimizer": optimizer.state_dict(),
+                    "scaler": scaler.state_dict(),
+                    "scheduler": scheduler.state_dict(),
+                    "step_counter": step_counter,
+                    "default_emb": default_embedding,
+                },
+                os.path.join(save_directory, "checkpoint_lastest.pt"),
+            )
 
             delete_old_checkpoints(save_directory, keep=5)
             path_to_most_recent_plot = plot_progress_spec(
@@ -271,14 +267,14 @@ def train_loop(
         print(f"\nSteps: {step_counter}")
         print(
             "Spectrogram Loss: {}".format(
-                sum(train_losses_this_epoch) / len(train_losses_this_epoch)
+                train_loss_epoch
             )
         )
 
         if len(cycle_losses_this_epoch) != 0:
             print(
                 "Cycle Loss: {}".format(
-                    sum(cycle_losses_this_epoch) / len(cycle_losses_this_epoch)
+                    cycle_loss_epoch
                 )
             )
 
@@ -289,10 +285,8 @@ def train_loop(
         if use_wandb:
             wandb.log(
                 {
-                    "spectrogram_loss": sum(train_losses_this_epoch)
-                    / len(train_losses_this_epoch),
-                    "cycle_loss": sum(cycle_losses_this_epoch)
-                    / len(cycle_losses_this_epoch)
+                    "spectrogram_loss": train_loss_epoch,
+                    "cycle_loss": cycle_loss_epoch
                     if len(cycle_losses_this_epoch) != 0
                     else 0.0,
                     "Steps": step_counter,
