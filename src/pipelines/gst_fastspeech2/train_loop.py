@@ -103,10 +103,10 @@ def train_loop(
     if path_to_checkpoint is not None:
         check_dict = torch.load(path_to_checkpoint, map_location=device)
         net.load_state_dict(check_dict["model"])
+        step_counter = check_dict["step_counter"]
         if not fine_tune:
             optimizer.load_state_dict(check_dict["optimizer"])
             scheduler.load_state_dict(check_dict["scheduler"])
-            step_counter = check_dict["step_counter"]
             scaler.load_state_dict(check_dict["scaler"])
 
     net.train()
