@@ -84,7 +84,7 @@ class FastSpeech2(torch.nn.Module, ABC):
         pitch_predictor_dropout=0.5,
         pitch_embed_kernel_size=1,
         pitch_embed_dropout=0.0,
-        stop_gradient_from_pitch_predictor=True,
+        stop_gradient_from_pitch_predictor=False,
         # training related
         transformer_enc_dropout_rate=0.2,
         transformer_enc_positional_dropout_rate=0.2,
@@ -307,8 +307,8 @@ class FastSpeech2(torch.nn.Module, ABC):
         loss = l1_loss + duration_loss + pitch_loss + energy_loss
 
         if return_mels:
-            return loss, after_outs
-        return loss
+            return loss, after_outs, l1_loss, duration_loss, pitch_loss, energy_loss 
+        return loss , l1_loss, duration_loss, pitch_loss, energy_loss
 
     def _forward(
         self,
