@@ -253,10 +253,7 @@ def train_loop(
                     },
                     os.path.join(save_directory, "checkpoint_best_train_loss.pt"),
                 )
-                torch.save(
-                    {"style_emb_func": style_embedding_function.state_dict()},
-                    os.path.join(save_directory, "embedding_function_best_train_loss.pt"),
-                )
+
             # Save the best model based on the cycle loss
             if cycle_loss_epoch < best_cycle_loss and cycle_loss_epoch != 0.0:
                 best_cycle_loss = cycle_loss_epoch
@@ -271,10 +268,7 @@ def train_loop(
                     },
                     os.path.join(save_directory, "checkpoint_best_cycle_loss.pt"),
                 )
-                torch.save(
-                    {"style_emb_func": style_embedding_function.state_dict()},
-                    os.path.join(save_directory, "embedding_function_best_cycle_loss.pt"),
-                )
+
             # Save the lastest model
             torch.save(
                 {
@@ -286,10 +280,6 @@ def train_loop(
                     "default_emb": default_embedding,
                 },
                 os.path.join(save_directory, "checkpoint_lastest.pt"),
-            )
-            torch.save(
-                {"style_emb_func": style_embedding_function.state_dict()},
-                os.path.join(save_directory, "embedding_function_lastest.pt"),
             )
 
             delete_old_checkpoints(save_directory, keep=5)
@@ -314,13 +304,6 @@ def train_loop(
             )
         )
 
-        # if len(cycle_losses_this_epoch) != 0:
-        #     print(
-        #         "Cycle Loss: {}".format(
-        #             cycle_loss_epoch
-        #         )
-        #     )
-
         print(
             "Time elapsed:  {} Minutes".format(round((time.time() - start_time) / 60))
         )
@@ -333,9 +316,9 @@ def train_loop(
                     "Duration_loss": duration_loss_epoch,
                     "Pitch_loss": pitch_loss_epoch,
                     "Energy_loss": energy_loss_epoch,
-                    "cycle_loss": cycle_loss_epoch,
+                    "Cycle_loss": cycle_loss_epoch,
                     "Steps": step_counter,
-                    "progress_plot": wandb.Image(path_to_most_recent_plot),
+                    # "progress_plot": wandb.Image(path_to_most_recent_plot),
                 }
             )
 
