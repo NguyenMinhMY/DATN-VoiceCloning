@@ -264,6 +264,14 @@ def train_loop(
 
         net.eval()
         style_embedding_function.eval()
+        
+        train_loss_epoch = sum(train_losses_this_epoch) / len(train_losses_this_epoch) if len(train_losses_this_epoch) > 0 else 0.0
+        l1_loss_epoch = sum(l1_losses_this_epoch) / len(l1_losses_this_epoch) if len(l1_losses_this_epoch) > 0 else 0.0
+        duration_loss_epoch = sum(duration_losses_this_epoch) / len(duration_losses_this_epoch) if len(duration_losses_this_epoch) > 0 else 0.0
+        pitch_loss_epoch = sum(pitch_losses_this_epoch) / len(pitch_losses_this_epoch) if len(pitch_losses_this_epoch) > 0 else 0.0
+        energy_loss_epoch = sum(energy_losses_this_epoch) / len(energy_losses_this_epoch) if len(energy_losses_this_epoch) > 0 else 0.0
+        cycle_loss_epoch = sum(cycle_losses_this_epoch) / len(cycle_losses_this_epoch) if len(cycle_losses_this_epoch) > 0 else 0.0
+
         if step_counter % steps_per_save == 0 and step_counter != 1:
             default_embedding = style_embedding_function(
                 batch_of_spectrograms=train_dataset[0][2].unsqueeze(0).to(device),
@@ -272,13 +280,6 @@ def train_loop(
                 .to(device),
             ).squeeze()
 
-
-            train_loss_epoch = sum(train_losses_this_epoch) / len(train_losses_this_epoch) if len(train_losses_this_epoch) > 0 else 0.0
-            l1_loss_epoch = sum(l1_losses_this_epoch) / len(l1_losses_this_epoch) if len(l1_losses_this_epoch) > 0 else 0.0
-            duration_loss_epoch = sum(duration_losses_this_epoch) / len(duration_losses_this_epoch) if len(duration_losses_this_epoch) > 0 else 0.0
-            pitch_loss_epoch = sum(pitch_losses_this_epoch) / len(pitch_losses_this_epoch) if len(pitch_losses_this_epoch) > 0 else 0.0
-            energy_loss_epoch = sum(energy_losses_this_epoch) / len(energy_losses_this_epoch) if len(energy_losses_this_epoch) > 0 else 0.0
-            cycle_loss_epoch = sum(cycle_losses_this_epoch) / len(cycle_losses_this_epoch) if len(cycle_losses_this_epoch) > 0 else 0.0
 
             # Save the best model based on the train loss
             if train_loss_epoch < best_train_loss:
