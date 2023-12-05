@@ -131,20 +131,26 @@ def train_loop(
                     batch_of_spectrogram_lengths=batch[3].to(device),
                     return_all_outs=True,
                 )
-
-                train_loss, output_spectrograms, l1_loss, duration_loss, pitch_loss, energy_loss  = net(
+                (
+                    train_loss,
+                    output_spectrograms,
+                    l1_loss,
+                    duration_loss,
+                    pitch_loss,
+                    energy_loss,
+                ) = net(
                     text_tensors=batch[0].to(device),
                     text_lengths=batch[1].to(device),
                     gold_speech=batch[2].to(device),
                     speech_lengths=batch[3].to(device),
                     gold_durations=batch[4].to(device),
-                    gold_pitch=batch[6].to(device),  # mind the switched order
-                    gold_energy=batch[5].to(device),  # mind the switched order
+                    gold_energy=batch[5].to(device),
+                    gold_pitch=batch[6].to(device),
                     utterance_embedding=style_embedding_of_gold.detach(),
                     lang_ids=batch[8].to(device),
                     return_mels=True,
                 )
-                # style_embedding_function.train() - Not allow adapt weight to Style Embedding function
+                style_embedding_function.train()
                 (
                     style_embedding_of_predicted,
                     out_list_predicted,
@@ -169,7 +175,6 @@ def train_loop(
                 energy_losses_this_epoch.append(energy_loss.item())
                 cycle_losses_this_epoch.append(cycle_dist.item())
 
-
                 if step_counter <= phase_1_steps:
                     # ===============================================
                     # =        PHASE 1: no cycle objective          =
@@ -180,76 +185,6 @@ def train_loop(
                     # = PHASE 2:     cycle objective is added        =
                     # ================================================
                     train_loss = train_loss + cycle_dist
-                    
-            # with autocast():
-            #     if step_counter <= phase_1_steps:
-            #         # ===============================================
-            #         # =        PHASE 1: no cycle objective          =
-            #         # ===============================================
-            #         style_embedding = style_embedding_function(
-            #             batch_of_spectrograms=batch[2].to(device),
-            #             batch_of_spectrogram_lengths=batch[3].to(device),
-            #         )
-
-            #         train_loss = net(
-            #             text_tensors=batch[0].to(device),
-            #             text_lengths=batch[1].to(device),
-            #             gold_speech=batch[2].to(device),
-            #             speech_lengths=batch[3].to(device),
-            #             gold_durations=batch[4].to(device),
-            #             gold_pitch=batch[6].to(device),  # mind the switched order
-            #             gold_energy=batch[5].to(device),  # mind the switched order
-            #             utterance_embedding=style_embedding,
-            #             lang_ids=batch[8].to(device),
-            #             return_mels=False,
-            #         )
-            #         train_losses_this_epoch.append(train_loss.item())
-
-            #     else:
-            #         # ================================================
-            #         # = PHASE 2:     cycle objective is added        =
-            #         # ================================================
-            #         style_embedding_function.eval()
-            #         style_embedding_of_gold, out_list_gold = style_embedding_function(
-            #             batch_of_spectrograms=batch[2].to(device),
-            #             batch_of_spectrogram_lengths=batch[3].to(device),
-            #             return_all_outs=True,
-            #         )
-
-            #         train_loss, output_spectrograms = net(
-            #             text_tensors=batch[0].to(device),
-            #             text_lengths=batch[1].to(device),
-            #             gold_speech=batch[2].to(device),
-            #             speech_lengths=batch[3].to(device),
-            #             gold_durations=batch[4].to(device),
-            #             gold_pitch=batch[6].to(device),  # mind the switched order
-            #             gold_energy=batch[5].to(device),  # mind the switched order
-            #             utterance_embedding=style_embedding_of_gold.detach(),
-            #             lang_ids=batch[8].to(device),
-            #             return_mels=True,
-            #         )
-            #         style_embedding_function.train()
-            #         (
-            #             style_embedding_of_predicted,
-            #             out_list_predicted,
-            #         ) = style_embedding_function(
-            #             batch_of_spectrograms=output_spectrograms,
-            #             batch_of_spectrogram_lengths=batch[3].to(device),
-            #             return_all_outs=True,
-            #         )
-
-            #         cycle_dist = 0
-            #         for out_gold, out_pred in zip(out_list_gold, out_list_predicted):
-            #             # essentially feature matching, as is often done in vocoder training,
-            #             # since we're essentially dealing with a discriminator here.
-            #             cycle_dist = cycle_dist + torch.nn.functional.l1_loss(
-            #                 out_pred, out_gold.detach()
-            #             )
-
-            #         train_losses_this_epoch.append(train_loss.item())
-            #         cycle_losses_this_epoch.append(cycle_dist.item())
-
-            #         train_loss = train_loss + cycle_dist
 
             optimizer.zero_grad()
             scaler.scale(train_loss).backward()
@@ -264,13 +199,37 @@ def train_loop(
 
         net.eval()
         style_embedding_function.eval()
-        
-        train_loss_epoch = sum(train_losses_this_epoch) / len(train_losses_this_epoch) if len(train_losses_this_epoch) > 0 else 0.0
-        l1_loss_epoch = sum(l1_losses_this_epoch) / len(l1_losses_this_epoch) if len(l1_losses_this_epoch) > 0 else 0.0
-        duration_loss_epoch = sum(duration_losses_this_epoch) / len(duration_losses_this_epoch) if len(duration_losses_this_epoch) > 0 else 0.0
-        pitch_loss_epoch = sum(pitch_losses_this_epoch) / len(pitch_losses_this_epoch) if len(pitch_losses_this_epoch) > 0 else 0.0
-        energy_loss_epoch = sum(energy_losses_this_epoch) / len(energy_losses_this_epoch) if len(energy_losses_this_epoch) > 0 else 0.0
-        cycle_loss_epoch = sum(cycle_losses_this_epoch) / len(cycle_losses_this_epoch) if len(cycle_losses_this_epoch) > 0 else 0.0
+
+        train_loss_epoch = (
+            sum(train_losses_this_epoch) / len(train_losses_this_epoch)
+            if len(train_losses_this_epoch) > 0
+            else 0.0
+        )
+        l1_loss_epoch = (
+            sum(l1_losses_this_epoch) / len(l1_losses_this_epoch)
+            if len(l1_losses_this_epoch) > 0
+            else 0.0
+        )
+        duration_loss_epoch = (
+            sum(duration_losses_this_epoch) / len(duration_losses_this_epoch)
+            if len(duration_losses_this_epoch) > 0
+            else 0.0
+        )
+        pitch_loss_epoch = (
+            sum(pitch_losses_this_epoch) / len(pitch_losses_this_epoch)
+            if len(pitch_losses_this_epoch) > 0
+            else 0.0
+        )
+        energy_loss_epoch = (
+            sum(energy_losses_this_epoch) / len(energy_losses_this_epoch)
+            if len(energy_losses_this_epoch) > 0
+            else 0.0
+        )
+        cycle_loss_epoch = (
+            sum(cycle_losses_this_epoch) / len(cycle_losses_this_epoch)
+            if len(cycle_losses_this_epoch) > 0
+            else 0.0
+        )
 
         if step_counter % steps_per_save == 0 and step_counter != 1:
             default_embedding = style_embedding_function(
@@ -279,7 +238,6 @@ def train_loop(
                 .unsqueeze(0)
                 .to(device),
             ).squeeze()
-
 
             # Save the best model based on the train loss
             if train_loss_epoch < best_train_loss:
@@ -335,7 +293,12 @@ def train_loop(
         print(f"\nSteps: {step_counter}")
         print(
             "Training Loss: {} - L1 Loss: {} - Duration Loss: {} - Pitch Loss: {} - Energy Loss: {} - Cycle Loss: {}".format(
-                train_loss_epoch, l1_loss_epoch, duration_loss_epoch, pitch_loss_epoch, energy_loss_epoch, cycle_loss_epoch
+                train_loss_epoch,
+                l1_loss_epoch,
+                duration_loss_epoch,
+                pitch_loss_epoch,
+                energy_loss_epoch,
+                cycle_loss_epoch,
             )
         )
 
