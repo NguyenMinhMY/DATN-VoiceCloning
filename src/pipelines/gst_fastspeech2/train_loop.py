@@ -16,7 +16,7 @@ from src.utility.warmup_scheduler import WarmupScheduler
 from src.utility.storage_config import MODELS_DIR
 from src.utility.utils import delete_old_checkpoints
 from src.utility.utils import get_most_recent_checkpoint
-from src.utility.utils import plot_progress_spec, clip_grad_norm_
+from src.utility.utils import plot_progress_spec
 
 
 def collate_and_pad(batch):
@@ -191,7 +191,7 @@ def train_loop(
             scaler.scale(train_loss).backward()
 
             scaler.unscale_(optimizer)
-            clip_grad_norm_(
+            torch.nn.utils.clip_grad_norm_(
                 net.parameters(), 1.0, error_if_nonfinite=False
             )
             scaler.step(optimizer)
