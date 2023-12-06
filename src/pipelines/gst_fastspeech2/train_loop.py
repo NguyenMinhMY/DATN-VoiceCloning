@@ -282,15 +282,7 @@ def train_loop(
                 os.path.join(save_directory, "checkpoint_lastest.pt"),
             )
 
-            delete_old_checkpoints(save_directory, keep=5)
-            path_to_most_recent_plot = plot_progress_spec(
-                net,
-                device,
-                save_dir=save_directory,
-                step=step_counter,
-                lang=lang,
-                default_emb=default_embedding,
-            )
+            # delete_old_checkpoints(save_directory, keep=5)
 
         print(f"\nSteps: {step_counter}")
         print(
