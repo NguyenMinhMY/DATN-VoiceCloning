@@ -125,7 +125,7 @@ def train_loop(
         energy_losses_this_epoch = list()
         cycle_losses_this_epoch = list()
         for batch in tqdm(train_loader):
-            with autocast(enabled=enable_autocast):
+            with autocast(enabled=enable_autocast, cache_enabled=False):
                 style_embedding_function.eval()
                 style_embedding_of_gold, out_list_gold = style_embedding_function(
                     batch_of_spectrograms=batch[2].to(device),
