@@ -187,6 +187,7 @@ def train_loop(
                     # ================================================
                     train_loss = train_loss + cycle_dist
 
+            style_embedding_function.zero_grad()
             optimizer.zero_grad()
             scaler.scale(train_loss).backward()
 
