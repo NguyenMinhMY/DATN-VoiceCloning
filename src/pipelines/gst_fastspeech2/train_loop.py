@@ -16,7 +16,7 @@ from src.utility.warmup_scheduler import WarmupScheduler
 from src.utility.storage_config import MODELS_DIR
 from src.utility.utils import delete_old_checkpoints
 from src.utility.utils import get_most_recent_checkpoint
-from src.utility.utils import plot_progress_spec
+from src.utility.utils import plot_progress_spec, clip_grad_norm_
 
 
 def collate_and_pad(batch):
@@ -124,7 +124,7 @@ def train_loop(
         energy_losses_this_epoch = list()
         cycle_losses_this_epoch = list()
         for batch in tqdm(train_loader):
-            with autocast():
+            with autocast(enabled=False):
                 style_embedding_function.eval()
                 style_embedding_of_gold, out_list_gold = style_embedding_function(
                     batch_of_spectrograms=batch[2].to(device),
@@ -190,7 +190,7 @@ def train_loop(
             scaler.scale(train_loss).backward()
 
             scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(
+            clip_grad_norm_(
                 net.parameters(), 1.0, error_if_nonfinite=False
             )
             scaler.step(optimizer)
