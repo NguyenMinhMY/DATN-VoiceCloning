@@ -194,26 +194,28 @@ def train_loop(
         spts, qrys = dataset.next()
         meta_batch_size = len(spts)
         for spt, qry in zip(spts, qrys):
-            spt = collate_and_pad(spt)
-            qry = collate_and_pad(qry)
+            with torch.backends.cudnn.flags(enabled=False):
+                spt = collate_and_pad(spt)
+                qry = collate_and_pad(qry)
 
-            learner = net.clone()
-            (
-                eval_loss,
-                output_spectrograms,
-                l1_loss,
-                duration_loss,
-                pitch_loss,
-                energy_loss,
-                cycle_dist,
-            ) = fast_adapt(
-                spt,
-                qry,
-                learner,
-                style_embedding_function,
-                is_phase_2=step > phase_1_steps,
-                device=device,
-            )
+                learner = net.clone()
+                (
+                    eval_loss,
+                    output_spectrograms,
+                    l1_loss,
+                    duration_loss,
+                    pitch_loss,
+                    energy_loss,
+                    cycle_dist,
+                ) = fast_adapt(
+                    spt,
+                    qry,
+                    learner,
+                    style_embedding_function,
+                    adaptation_steps=adaptation_steps,
+                    is_phase_2=step > phase_1_steps,
+                    device=device,
+                )
 
             eval_losses_this_step.append(eval_loss.item())
             l1_losses_this_step.append(l1_loss.item())
