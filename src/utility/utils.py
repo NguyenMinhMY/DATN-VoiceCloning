@@ -836,9 +836,10 @@ def clip_grad_norm_(
     else:
         total_norm = torch.norm(torch.stack([torch.norm(p.grad.detach(), norm_type).to(device) for p in parameters]), norm_type)
     if torch.logical_or(total_norm.isnan(), total_norm.isinf()):
-        print(
-            f'The total norm of order {norm_type} for gradients from '
-            '`parameters` is non-finite, will set to zero before clipping .  ')
+        if error_if_nonfinite:
+            print(
+                f'The total norm of order {norm_type} for gradients from '
+                '`parameters` is non-finite, will set to zero before clipping .  ')
 
         for p in parameters:
             p_grad_=p.grad.detach()
