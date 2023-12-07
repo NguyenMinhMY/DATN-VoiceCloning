@@ -120,6 +120,7 @@ def train_loop(
     phase_2_steps,
     adaptation_steps,
     steps_per_save,
+    steps_per_log,
     path_to_checkpoint,
     path_to_embed_model=os.path.join(MODELS_DIR, "Embedding", "embedding_function.pt"),
     inner_lr=0.01,
@@ -268,32 +269,34 @@ def train_loop(
             else 0.0
         )
 
-        print(f"\nSteps {step}: ", end="")
-        print(
-            "Training Loss: {} - L1 Loss: {} - Duration Loss: {} - Pitch Loss: {} - Energy Loss: {} - Cycle Loss: {}".format(
-                eval_loss_step,
-                l1_loss_step,
-                duration_loss_step,
-                pitch_loss_step,
-                energy_loss_step,
-                cycle_loss_step,
-            )
-        )
 
-        print("Time elapsed:  {} Seconds".format(round(time.time() - start_time)))
-
-        if use_wandb:
-            wandb.log(
-                {
-                    "Training_loss": eval_loss_step,
-                    "L1_loss": l1_loss_step,
-                    "Duration_loss": duration_loss_step,
-                    "Pitch_loss": pitch_loss_step,
-                    "Energy_loss": energy_loss_step,
-                    "Cycle_loss": cycle_loss_step,
-                    "Steps": step,
-                }
+        if step % steps_per_log == 0:
+            print(f"\nSteps {step}: ", end="")
+            print(
+                "Training Loss: {} - L1 Loss: {} - Duration Loss: {} - Pitch Loss: {} - Energy Loss: {} - Cycle Loss: {}".format(
+                    eval_loss_step,
+                    l1_loss_step,
+                    duration_loss_step,
+                    pitch_loss_step,
+                    energy_loss_step,
+                    cycle_loss_step,
+                )
             )
+
+            print("Time elapsed:  {} Seconds".format(round(time.time() - start_time)))
+
+            if use_wandb:
+                wandb.log(
+                    {
+                        "Training_loss": eval_loss_step,
+                        "L1_loss": l1_loss_step,
+                        "Duration_loss": duration_loss_step,
+                        "Pitch_loss": pitch_loss_step,
+                        "Energy_loss": energy_loss_step,
+                        "Cycle_loss": cycle_loss_step,
+                        "Steps": step,
+                    }
+                )
 
         if step % steps_per_save == 0:
             # Save the lastest model
