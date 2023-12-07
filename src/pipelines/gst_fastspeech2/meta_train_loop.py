@@ -139,7 +139,9 @@ def train_loop(
 
     steps = phase_1_steps + phase_2_steps
     net = net.to(device)
-    net = l2l.algorithms.MAML(net, lr=inner_lr,allow_nograd=allow_nograd, allow_unused=allow_unused)
+    net = l2l.algorithms.MAML(
+        net, lr=inner_lr, allow_nograd=allow_nograd, allow_unused=allow_unused
+    )
 
     style_embedding_function = StyleEmbedding().to(device)
     check_dict = torch.load(path_to_embed_model, map_location=device)
@@ -177,7 +179,7 @@ def train_loop(
     # =============================
     # Actual train loop starts here
     # =============================
-    for step in tqdm(range(step_counter + 1, steps+1)):
+    for step in tqdm(range(step_counter + 1, steps + 1)):
         start_time = time.time()
 
         eval_losses_this_step = []
@@ -209,10 +211,10 @@ def train_loop(
                 qry,
                 learner,
                 style_embedding_function,
-                is_phase_2=step_counter > phase_1_steps,
+                is_phase_2=step > phase_1_steps,
                 device=device,
             )
-            
+
             eval_losses_this_step.append(eval_loss.item())
             l1_losses_this_step.append(l1_loss.item())
             duration_losses_this_step.append(duration_loss.item())
@@ -264,7 +266,7 @@ def train_loop(
             else 0.0
         )
 
-        print(f"\nSteps: {step}")
+        print(f"\nSteps {step}: ", end="")
         print(
             "Training Loss: {} - L1 Loss: {} - Duration Loss: {} - Pitch Loss: {} - Energy Loss: {} - Cycle Loss: {}".format(
                 eval_loss_step,
@@ -276,9 +278,7 @@ def train_loop(
             )
         )
 
-        print(
-            "Time elapsed:  {} Minutes".format(round((time.time() - start_time) / 60))
-        )
+        print("Time elapsed:  {} Seconds".format(round(time.time() - start_time)))
 
         if use_wandb:
             wandb.log(
@@ -293,7 +293,6 @@ def train_loop(
                 }
             )
 
-
         if step % steps_per_save == 0:
             # Save the lastest model
             torch.save(
@@ -306,5 +305,5 @@ def train_loop(
                 },
                 os.path.join(save_directory, "checkpoint_lastest.pt"),
             )
-            
+
         net.train()

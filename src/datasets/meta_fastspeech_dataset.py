@@ -15,7 +15,8 @@ class MetaFastSpeechDataset(FastSpeechDataset):
         acoustic_checkpoint_path,
         cache_dir,
         lang,
-        n_way,
+        n_way_shot,
+        n_way_query,
         k_shot,
         k_query,
         n_task,
@@ -46,7 +47,8 @@ class MetaFastSpeechDataset(FastSpeechDataset):
             save_imgs,
         )
 
-        self.n_way = n_way
+        self.n_way_shot = n_way_shot
+        self.n_way_query = n_way_query
         self.k_shot = k_shot
         self.k_query = k_query
         self.n_task = n_task
@@ -79,27 +81,27 @@ class MetaFastSpeechDataset(FastSpeechDataset):
         for speaker_id in discard_speaker:
             self.speaker_samples.pop(speaker_id, None)
 
-        if 2 * self.n_way > len(self.speaker_samples):
+        if self.n_way_shot + self.n_way_query > len(self.speaker_samples):
             raise Exception(
-                f"Number of speaker must not less than {2*self.n_way}, but got {len(self.speaker_samples)}"
+                f"Number of speaker must not less than {self.n_way_shot + self.n_way_query}, but got {len(self.speaker_samples)}"
             )
         else:
             print(f"Got {len(self.speaker_samples)} speakers")
 
     def __getitem__(self, index):
-        # support set's size : (self.n_task, self.k_shot  * self.n_way)
-        # query set's size   : (self.n_task, self.k_query * self.n_way)
+        # support set's size : (self.n_task, self.k_shot  * self.n_way_shot)
+        # query set's size   : (self.n_task, self.k_query * self.n_way_query)
         spts, qrys = [], []
         for _ in range(self.n_task):
             spt, qry = [], []
-            selected_spk = random.sample(list(self.speaker_samples.keys()), 2 * self.n_way)
-            for i, speaker_id in enumerate(selected_spk[: self.n_way]):
+            selected_spk = random.sample(list(self.speaker_samples.keys()), self.n_way_shot + self.n_way_query)
+            for i, speaker_id in enumerate(selected_spk[: self.n_way_shot]):
                 selected_samples = random.sample(
                     self.speaker_samples[speaker_id], self.k_shot
                 )
                 spt += list(selected_samples)
 
-            for i, speaker_id in enumerate(selected_spk[self.n_way :]):
+            for i, speaker_id in enumerate(selected_spk[self.n_way_shot :]):
                 selected_samples = random.sample(
                     self.speaker_samples[speaker_id], self.k_query
                 )
@@ -128,7 +130,8 @@ if __name__ == "__main__":
         lang="en",
         loading_processes=2,  # depended on how many CPU you have
         device=device,
-        n_way=1,
+        n_way_shot=1,
+        n_way_query=1,
         k_shot=3,
         k_query=1,
         n_batch=5,
