@@ -22,3 +22,4 @@ speechbrain~=0.5.13
 dragonmapper~=0.2.6
 auraloss~=0.2.2
 alias_free_torch~=0.0.6
+learn2learn==0.2.0
