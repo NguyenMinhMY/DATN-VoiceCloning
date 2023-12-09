@@ -151,7 +151,7 @@ def train_loop(
                     lang_ids=batch[8].to(device),
                     return_mels=True,
                 )
-                style_embedding_function.train()
+                style_embedding_function.gst.ref_enc.gst.train()
                 (
                     style_embedding_of_predicted,
                     out_list_predicted,
