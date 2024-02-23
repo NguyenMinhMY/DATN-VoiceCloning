@@ -49,7 +49,7 @@ def unsqueeze(x, x_mask=None, num_sqz=2):
     return x_unsqz * x_mask, x_mask
 
 
-class Decoder(nn.Module):
+class FlowBasedDecoder(nn.Module):
     """Stack of Glow Decoder Modules.
 
     ::
@@ -69,13 +69,13 @@ class Decoder(nn.Module):
 
     def __init__(
         self,
-        in_channels,
-        hidden_channels,
-        kernel_size,
-        dilation_rate,
-        num_flow_blocks,
-        num_coupling_layers,
-        dropout_p=0.0,
+        in_channels = 80,
+        hidden_channels = 192,
+        kernel_size = 5,
+        dilation_rate = 1,
+        num_flow_blocks = 12,
+        num_coupling_layers = 4,
+        dropout_p=0.05,
         num_splits=4,
         num_squeeze=2,
         sigmoid_scale=False,
