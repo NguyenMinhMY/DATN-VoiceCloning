@@ -119,6 +119,7 @@ class FlowBasedDecoder(nn.Module):
             - x_mask: :math:`[B, 1 ,T]`
             - g: :math:`[B, C]`
         """
+        b, c, t = x.size()
         if not reverse:
             flows = self.flows
             logdet_tot = 0
@@ -136,6 +137,8 @@ class FlowBasedDecoder(nn.Module):
                 x, logdet = f(x, x_mask, g=g, reverse=reverse)
         if self.num_squeeze > 1:
             x, x_mask = unsqueeze(x, x_mask, self.num_squeeze)
+        if t % 2 == 1:
+            x = torch.cat((x, torch.zeros(b, c, 1)), dim=2)
         return x, logdet_tot
 
     def store_inverse(self):
