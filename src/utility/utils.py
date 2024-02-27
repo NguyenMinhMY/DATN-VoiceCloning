@@ -799,11 +799,17 @@ def curve_smoother(curve):
             new_curve.append(0)
     return new_curve
 
+
 # source: https://github.com/pytorch/pytorch/issues/40497#issuecomment-1134557412
 _tensor_or_tensors = Union[torch.Tensor, Iterable[torch.Tensor]]
+
+
 def clip_grad_norm_(
-        parameters: _tensor_or_tensors, max_norm: float, norm_type: float = 2.0,
-        error_if_nonfinite: bool = False) -> torch.Tensor:
+    parameters: _tensor_or_tensors,
+    max_norm: float,
+    norm_type: float = 2.0,
+    error_if_nonfinite: bool = False,
+) -> torch.Tensor:
     r"""Clips gradient norm of an iterable of parameters.
 
     The norm is computed over all gradients together, as if they were
@@ -827,28 +833,34 @@ def clip_grad_norm_(
     max_norm = float(max_norm)
     norm_type = float(norm_type)
     if len(parameters) == 0:
-        return torch.tensor(0.)
+        return torch.tensor(0.0)
     device = parameters[0].grad.device
 
     if norm_type == torch.inf:
         norms = [p.grad.detach().abs().max().to(device) for p in parameters]
         total_norm = norms[0] if len(norms) == 1 else torch.max(torch.stack(norms))
     else:
-        total_norm = torch.norm(torch.stack([torch.norm(p.grad.detach(), norm_type).to(device) for p in parameters]), norm_type)
+        total_norm = torch.norm(
+            torch.stack(
+                [torch.norm(p.grad.detach(), norm_type).to(device) for p in parameters]
+            ),
+            norm_type,
+        )
     if torch.logical_or(total_norm.isnan(), total_norm.isinf()):
         if error_if_nonfinite:
             print(
-                f'The total norm of order {norm_type} for gradients from '
-                '`parameters` is non-finite, will set to zero before clipping .  ')
+                f"The total norm of order {norm_type} for gradients from "
+                "`parameters` is non-finite, will set to zero before clipping .  "
+            )
 
         for p in parameters:
-            p_grad_=p.grad.detach()
-            nan_idxs=torch.isnan(p_grad_)
+            p_grad_ = p.grad.detach()
+            nan_idxs = torch.isnan(p_grad_)
             inf_idxs = torch.isinf(p_grad_)
             p_grad_[nan_idxs] = 0
             p_grad_[inf_idxs] = 0
-        return clip_grad_norm_(parameters, max_norm, norm_type,error_if_nonfinite)
-    
+        return clip_grad_norm_(parameters, max_norm, norm_type, error_if_nonfinite)
+
     clip_coef = max_norm / (total_norm + 1e-6)
     # Note: multiplying by the clamped coef is redundant when the coef is clamped to 1, but doing so
     # avoids a `if clip_coef < 1:` conditional which can require a CPU <=> device synchronization
@@ -857,6 +869,50 @@ def clip_grad_norm_(
     for p in parameters:
         p.grad.detach().mul_(clip_coef_clamped.to(p.grad.device))
     return total_norm
+
+
+def maximum_path(value, mask, max_neg_val=None):
+    """
+    Monotonic alignment search algorithm
+    Numpy-friendly version. It's about 4 times faster than torch version.
+    value: [b, t_x, t_y]
+    mask: [b, t_x, t_y]
+    """
+    if max_neg_val is None:
+        max_neg_val = -np.inf  # Patch for Sphinx complaint
+    value = value * mask
+
+    device = value.device
+    dtype = value.dtype
+    value = value.cpu().detach().numpy()
+    mask = mask.cpu().detach().numpy().astype(bool)
+
+    b, t_x, t_y = value.shape
+    direction = np.zeros(value.shape, dtype=np.int64)
+    v = np.zeros((b, t_x), dtype=np.float32)
+    x_range = np.arange(t_x, dtype=np.float32).reshape(1, -1)
+    for j in range(t_y):
+        v0 = np.pad(v, [[0, 0], [1, 0]], mode="constant", constant_values=max_neg_val)[
+            :, :-1
+        ]
+        v1 = v
+        max_mask = v1 >= v0
+        v_max = np.where(max_mask, v1, v0)
+        direction[:, :, j] = max_mask
+
+        index_mask = x_range <= j
+        v = np.where(index_mask, v_max + value[:, :, j], max_neg_val)
+    direction = np.where(mask, direction, 1)
+
+    path = np.zeros(value.shape, dtype=np.float32)
+    index = mask[:, :, 0].sum(1).astype(np.int64) - 1
+    index_range = np.arange(b)
+    for j in reversed(range(t_y)):
+        path[index_range, index, j] = 1
+        index = index + direction[index_range, index, j] - 1
+    path = path * mask.astype(np.float32)
+    path = torch.from_numpy(path).to(device=device, dtype=dtype)
+    return path
 
 
 if __name__ == "__main__":
