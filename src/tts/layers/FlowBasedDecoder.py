@@ -6,7 +6,6 @@ from src.tts.layers.common.CouplingBlock import CouplingBlock
 from src.tts.layers.common.InvConv import InvConvNear
 
 
-
 def squeeze(x, x_mask=None, num_sqz=2):
     """GlowTTS squeeze operation
     Increase number of channels and reduce number of time steps
@@ -40,7 +39,9 @@ def unsqueeze(x, x_mask=None, num_sqz=2):
     b, c, t = x.size()
 
     x_unsqz = x.view(b, num_sqz, c // num_sqz, t)
-    x_unsqz = x_unsqz.permute(0, 2, 3, 1).contiguous().view(b, c // num_sqz, t * num_sqz)
+    x_unsqz = (
+        x_unsqz.permute(0, 2, 3, 1).contiguous().view(b, c // num_sqz, t * num_sqz)
+    )
 
     if x_mask is not None:
         x_mask = x_mask.unsqueeze(-1).repeat(1, 1, 1, num_sqz).view(b, 1, t * num_sqz)
@@ -69,12 +70,12 @@ class FlowBasedDecoder(nn.Module):
 
     def __init__(
         self,
-        in_channels = 80,
-        hidden_channels = 192,
-        kernel_size = 5,
-        dilation_rate = 1,
-        num_flow_blocks = 12,
-        num_coupling_layers = 4,
+        in_channels=80,
+        hidden_channels=192,
+        kernel_size=5,
+        dilation_rate=1,
+        num_flow_blocks=12,
+        num_coupling_layers=4,
         dropout_p=0.05,
         num_splits=4,
         num_squeeze=2,
@@ -98,7 +99,9 @@ class FlowBasedDecoder(nn.Module):
         self.flows = nn.ModuleList()
         for _ in range(num_flow_blocks):
             self.flows.append(ActNorm(channels=in_channels * num_squeeze))
-            self.flows.append(InvConvNear(channels=in_channels * num_squeeze, num_splits=num_splits))
+            self.flows.append(
+                InvConvNear(channels=in_channels * num_squeeze, num_splits=num_splits)
+            )
             self.flows.append(
                 CouplingBlock(
                     in_channels * num_squeeze,
@@ -138,7 +141,7 @@ class FlowBasedDecoder(nn.Module):
         if self.num_squeeze > 1:
             x, x_mask = unsqueeze(x, x_mask, self.num_squeeze)
         if t % 2 == 1:
-            x = torch.cat((x, torch.zeros(b, c, 1)), dim=2)
+            x = torch.cat([x, torch.zeros(b, c, 1, device=x.device)], dim=2)
         return x, logdet_tot
 
     def store_inverse(self):
