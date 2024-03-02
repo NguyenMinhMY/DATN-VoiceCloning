@@ -250,7 +250,7 @@ class FastGlow(torch.nn.Module, ABC):
         loss = l1_loss + duration_loss + pitch_loss + energy_loss
 
         if return_mels:
-            return loss, after_outs, l1_loss, duration_loss, pitch_loss, energy_loss
+            return loss, before_outs, l1_loss, duration_loss, pitch_loss, energy_loss
         return loss, l1_loss, duration_loss, pitch_loss, energy_loss
 
     def _forward(
