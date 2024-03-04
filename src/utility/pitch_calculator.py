@@ -75,9 +75,11 @@ class Parselmouth(torch.nn.Module):
 
         # Adjust length to match with the mel-spectrogram
         pitch = self._adjust_num_frames(pitch, feats_lengths[0]).view(-1)
+        pitch_lengths = feats_lengths
 
-        pitch = self._average_by_duration(pitch, durations[0], text).view(-1)
-        pitch_lengths = durations_lengths
+        if self.use_token_averaged_f0:
+            pitch = self._average_by_duration(pitch, durations[0], text).view(-1)
+            pitch_lengths = durations_lengths
 
         if norm_by_average:
             average = pitch[pitch != 0.0].mean()

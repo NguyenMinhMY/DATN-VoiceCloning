@@ -23,7 +23,7 @@ from src.tts.models.fastglow.FastGlow import FastGlow
 
 
 def collate_and_pad(batch):
-    # text, text_len, speech, speech_len, durations, energy, pitch, utterance condition, language_id
+    # text, text_len, speech, speech_len, energy, pitch, utterance condition, language_id
     return (
         pad_sequence([datapoint[0] for datapoint in batch], batch_first=True),
         torch.stack([datapoint[1] for datapoint in batch]).squeeze(1),
@@ -31,9 +31,8 @@ def collate_and_pad(batch):
         torch.stack([datapoint[3] for datapoint in batch]).squeeze(1),
         pad_sequence([datapoint[4] for datapoint in batch], batch_first=True),
         pad_sequence([datapoint[5] for datapoint in batch], batch_first=True),
-        pad_sequence([datapoint[6] for datapoint in batch], batch_first=True),
         None,
-        torch.stack([datapoint[8] for datapoint in batch]),
+        torch.stack([datapoint[7] for datapoint in batch]),
     )
 
 def train_loop(
@@ -120,7 +119,7 @@ def train_loop(
         start_time = time.time()
 
         train_losses_this_epoch = list()
-        l1_losses_this_epoch = list()
+        mle_losses_this_epoch = list()
         duration_losses_this_epoch = list()
         pitch_losses_this_epoch = list()
         energy_losses_this_epoch = list()
@@ -136,7 +135,7 @@ def train_loop(
                 (
                     train_loss,
                     output_spectrograms,
-                    l1_loss,
+                    mle_loss,
                     duration_loss,
                     pitch_loss,
                     energy_loss,
@@ -145,10 +144,10 @@ def train_loop(
                     text_lengths=batch[1].to(device),
                     gold_speech=batch[2].to(device),
                     speech_lengths=batch[3].to(device),
-                    gold_energy=batch[5].to(device),
-                    gold_pitch=batch[6].to(device),
+                    gold_energy=batch[4].to(device),
+                    gold_pitch=batch[5].to(device),
                     utterance_embedding=style_embedding_of_gold.detach(),
-                    lang_ids=batch[8].to(device),
+                    lang_ids=batch[7].to(device),
                     return_mels=True,
                 )
                 style_embedding_function.gst.ref_enc.gst.train()
@@ -170,7 +169,7 @@ def train_loop(
                     )
 
                 train_losses_this_epoch.append(train_loss.item())
-                l1_losses_this_epoch.append(l1_loss.item())
+                mle_losses_this_epoch.append(mle_loss.item())
                 duration_losses_this_epoch.append(duration_loss.item())
                 pitch_losses_this_epoch.append(pitch_loss.item())
                 energy_losses_this_epoch.append(energy_loss.item())
@@ -207,9 +206,9 @@ def train_loop(
             if len(train_losses_this_epoch) > 0
             else 0.0
         )
-        l1_loss_epoch = (
-            sum(l1_losses_this_epoch) / len(l1_losses_this_epoch)
-            if len(l1_losses_this_epoch) > 0
+        mle_loss_epoch = (
+            sum(mle_losses_this_epoch) / len(mle_losses_this_epoch)
+            if len(mle_losses_this_epoch) > 0
             else 0.0
         )
         duration_loss_epoch = (
@@ -290,7 +289,7 @@ def train_loop(
         print(
             "Training Loss: {} - L1 Loss: {} - Duration Loss: {} - Pitch Loss: {} - Energy Loss: {} - Cycle Loss: {}".format(
                 train_loss_epoch,
-                l1_loss_epoch,
+                mle_loss_epoch,
                 duration_loss_epoch,
                 pitch_loss_epoch,
                 energy_loss_epoch,
@@ -306,7 +305,7 @@ def train_loop(
             wandb.log(
                 {
                     "Training_loss": train_loss_epoch,
-                    "L1_loss": l1_loss_epoch,
+                    "MLE_loss": mle_loss_epoch,
                     "Duration_loss": duration_loss_epoch,
                     "Pitch_loss": pitch_loss_epoch,
                     "Energy_loss": energy_loss_epoch,
