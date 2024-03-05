@@ -135,6 +135,12 @@ class FlowBasedDecoder(nn.Module):
         for f in flows:
             if not reverse:
                 x, logdet = f(x, x_mask, g=g, reverse=reverse)
+                # avoid inf and nan
+                if torch.isnan(logdet).any() or torch.isinf(logdet).any():
+                    logdet = torch.zeros_like(logdet, dtype=logdet.dtype).to(
+                        logdet.device
+                    )
+                logdet = torch.clamp(logdet, min=-100, max=100)
                 logdet_tot += logdet
             else:
                 x, logdet = f(x, x_mask, g=g, reverse=reverse)

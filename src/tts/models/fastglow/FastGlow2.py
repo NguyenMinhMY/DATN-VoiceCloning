@@ -229,18 +229,18 @@ class FastGlow2(torch.nn.Module, ABC):
         
         # calculate loss
         mle_loss, duration_loss, pitch_loss, energy_loss = self.criterion(
-            z_outs=z_outs, 
-            z_mean_outs=z_mean_outs, 
-            z_std_outs=z_std_outs,
-            d_outs=d_outs,
-            p_outs=p_outs,
-            e_outs=e_outs,
-            ds=mas_outs,
-            ps=gold_pitch,
-            es=gold_energy,
-            ilens=text_lengths,
-            olens=speech_lengths,
-            logdet=logdet,
+            z_outs=z_outs.float(), 
+            z_mean_outs=z_mean_outs.float(), 
+            z_std_outs=z_std_outs.float(),
+            d_outs=d_outs.float(),
+            p_outs=p_outs.float(),
+            e_outs=e_outs.float(),
+            ds=mas_outs.float(),
+            ps=gold_pitch.float(),
+            es=gold_energy.float(),
+            ilens=text_lengths.float(),
+            olens=speech_lengths.float(),
+            logdet=logdet.float(),
         )
         loss = mle_loss + duration_loss + pitch_loss + energy_loss
 
@@ -329,7 +329,7 @@ class FastGlow2(torch.nn.Module, ABC):
 
             z, logdet = self.decoder(
                 gold_speech.transpose(1, 2),
-                x_mask=speech_masks,
+                x_mask=speech_masks.to(text_tensors.dtype),
                 g=utterance_embedding.unsqueeze(-1),
                 reverse=False,
             )
