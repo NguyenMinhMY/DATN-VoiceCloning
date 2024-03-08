@@ -287,7 +287,7 @@ def train_loop(
 
         print(f"\nSteps: {step_counter}")
         print(
-            "Training Loss: {} - L1 Loss: {} - Duration Loss: {} - Pitch Loss: {} - Energy Loss: {} - Cycle Loss: {}".format(
+            "Training Loss: {} - MLE Loss: {} - Duration Loss: {} - Pitch Loss: {} - Energy Loss: {} - Cycle Loss: {}".format(
                 train_loss_epoch,
                 mle_loss_epoch,
                 duration_loss_epoch,

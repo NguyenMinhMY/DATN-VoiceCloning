@@ -98,7 +98,7 @@ class FastGlowDataset(Dataset):
 
             print("... building dataset cache ...")
             self.datapoints = list()
-            self.ctc_losses = list()
+            # self.ctc_losses = list()
 
             # ==========================================
             # actual creation of datapoints starts here
