@@ -910,6 +910,7 @@ def maximum_path(value, mask, max_neg_val=None):
     for j in reversed(range(t_y)):
         path[index_range, index, j] = 1
         index = index + direction[index_range, index, j] - 1
+        index = np.where(index < 0, 0, index)
     path = path * mask.astype(np.float32)
     path = torch.from_numpy(path).to(device=device, dtype=dtype)
     return path
