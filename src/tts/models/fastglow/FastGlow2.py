@@ -361,8 +361,8 @@ class FastGlow2(torch.nn.Module, ABC):
                 encoded_texts_std, mas_durations, alpha
             )   # [B, Lmax, odim]
             
-            z_p = encoded_texts_mean + torch.exp(encoded_texts_std) * torch.randn_like(encoded_texts_mean) # [B, Lmax, odim]
-            z = z_p + embedded_curve  # [B, Lmax, odim]
+            z_p_forward = encoded_texts_mean + torch.exp(encoded_texts_std) * torch.randn_like(encoded_texts_mean) # [B, Lmax, odim]
+            z = z_p_forward + embedded_curve  # [B, Lmax, odim]
 
         ys, _ = self.decoder(
             z.transpose(1, 2),

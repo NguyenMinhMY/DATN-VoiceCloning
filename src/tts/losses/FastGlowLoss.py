@@ -94,7 +94,7 @@ class FastGlowLoss(torch.nn.Module):
             torch.sum(olens) * z_outs.shape[2]
         )
 
-        duration_loss = self.duration_criterion(d_outs, ds)  # [B, Tmax]
+        duration_loss = self.duration_criterion(d_outs, ds.detach())  # [B, Tmax]
         pitch_loss = self.mse_criterion(p_outs, ps)  # [B, Lmax, 1]
         energy_loss = self.mse_criterion(e_outs, es)  # [B, Lmax, 1]
 
