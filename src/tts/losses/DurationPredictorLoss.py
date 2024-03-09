@@ -36,7 +36,8 @@ class DurationPredictorLoss(torch.nn.Module):
 
         """
         # NOTE: outputs is in log domain while targets in linear
-        # targets = torch.log(targets.float() + self.offset) # change linear to log
+        targets = torch.log(targets.float() + self.offset)  # change linear to log
+        outputs = torch.log(outputs.float() + self.offset)  # change linear to log
         loss = self.criterion(outputs, targets)
 
         return loss
