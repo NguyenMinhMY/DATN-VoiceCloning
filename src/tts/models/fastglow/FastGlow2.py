@@ -498,3 +498,15 @@ class FastGlow2(torch.nn.Module, ABC):
         # initialize parameters
         if init_type != "pytorch":
             initialize(self, init_type)
+
+    def unlock_act_norm_layers(self):
+        """Unlock activation normalization layers for data depended initalization."""
+        for f in self.decoder.flows:
+            if getattr(f, "set_ddi", False):
+                f.set_ddi(True)
+
+    def lock_act_norm_layers(self):
+        """Lock activation normalization layers."""
+        for f in self.decoder.flows:
+            if getattr(f, "set_ddi", False):
+                f.set_ddi(False)

@@ -17,7 +17,7 @@ from src.utility.utils import get_most_recent_checkpoint
 from src.utility.utils import plot_progress_spec, clip_grad_norm_
 from src.utility.warmup_scheduler import WarmupScheduler
 from src.spk_embedding.StyleEmbedding import StyleEmbedding
-from src.tts.models.fastglow.FastGlow import FastGlow
+from src.tts.models.fastglow.FastGlow2 import FastGlow2
 
 
 def collate_and_pad(batch):
@@ -35,7 +35,7 @@ def collate_and_pad(batch):
 
 
 def train_loop(
-    net: FastGlow,
+    net: FastGlow2,
     train_dataset,
     device,
     save_directory,
@@ -48,6 +48,7 @@ def train_loop(
     path_to_embed_model=os.path.join(MODELS_DIR, "Embedding", "embedding_function.pt"),
     fine_tune=False,
     resume=False,
+    init_act_norm_steps=2300,
     phase_1_steps=100000,
     phase_2_steps=100000,
     use_wandb=False,
@@ -114,6 +115,29 @@ def train_loop(
     best_train_loss = float("inf")
     best_cycle_loss = float("inf")
 
+    print("Initialising act norm layers")
+    for _, batch in tqdm(zip(range(init_act_norm_steps), train_loader)):
+        net.unlock_act_norm_layers()
+        with torch.no_grad():
+            style_embedding_of_gold, _ = style_embedding_function(
+                batch_of_spectrograms=batch[2].to(device),
+                batch_of_spectrogram_lengths=batch[3].to(device),
+                return_all_outs=True,
+            )
+            _ = net(
+                text_tensors=batch[0].to(device),
+                text_lengths=batch[1].to(device),
+                gold_speech=batch[2].to(device),
+                speech_lengths=batch[3].to(device),
+                gold_energy=batch[4].to(device),
+                gold_pitch=batch[5].to(device),
+                utterance_embedding=style_embedding_of_gold.detach(),
+                lang_ids=batch[7].to(device),
+                return_mels=True,
+            )
+        net.lock_act_norm_layers()
+
+    print("Starting training")
     for step_counter in range(step_counter + 1, steps + 1):
         start_time = time.time()
 
@@ -193,9 +217,7 @@ def train_loop(
             scaler.scale(train_loss).backward()
 
             scaler.unscale_(optimizer)
-            clip_grad_norm_(
-                net.parameters(), 1.0, error_if_nonfinite=False
-            )
+            clip_grad_norm_(net.parameters(), 1.0, error_if_nonfinite=False)
             scaler.step(optimizer)
             scaler.update()
             scheduler.step()
