@@ -228,13 +228,15 @@ class FastGlow2(torch.nn.Module, ABC):
         mel_outs, z_outs, z_mean_outs, z_std_outs, d_outs, p_outs, e_outs, mas_outs, logdet = fs_outs
         
         # calculate loss
-        mle_loss, duration_loss, pitch_loss, energy_loss = self.criterion(
+        l1_loss, mle_loss, duration_loss, pitch_loss, energy_loss = self.criterion(
+            mel_outs=mel_outs.float(),
             z_outs=z_outs.float(), 
             z_mean_outs=z_mean_outs.float(), 
             z_std_outs=z_std_outs.float(),
             d_outs=d_outs.float(),
             p_outs=p_outs.float(),
             e_outs=e_outs.float(),
+            ys=gold_speech,
             ds=mas_outs.float(),
             ps=gold_pitch.float(),
             es=gold_energy.float(),
@@ -242,10 +244,10 @@ class FastGlow2(torch.nn.Module, ABC):
             olens=speech_lengths.float(),
             logdet=logdet.float(),
         )
-        loss = mle_loss + duration_loss + pitch_loss + energy_loss
+        loss = l1_loss + mle_loss + duration_loss + pitch_loss + energy_loss
 
         if return_mels:
-            return loss, mel_outs, mle_loss, duration_loss, pitch_loss, energy_loss
+            return loss, mel_outs, l1_loss, mle_loss, duration_loss, pitch_loss, energy_loss
         return loss, mle_loss, duration_loss, pitch_loss, energy_loss
 
     def _forward(

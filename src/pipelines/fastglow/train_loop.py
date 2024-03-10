@@ -20,8 +20,6 @@ from src.spk_embedding.StyleEmbedding import StyleEmbedding
 from src.tts.models.fastglow.FastGlow import FastGlow
 
 
-
-
 def collate_and_pad(batch):
     # text, text_len, speech, speech_len, energy, pitch, utterance condition, language_id
     return (
@@ -34,6 +32,7 @@ def collate_and_pad(batch):
         None,
         torch.stack([datapoint[7] for datapoint in batch]),
     )
+
 
 def train_loop(
     net: FastGlow,
@@ -52,7 +51,7 @@ def train_loop(
     phase_1_steps=100000,
     phase_2_steps=100000,
     use_wandb=False,
-    enable_autocast=True
+    enable_autocast=True,
 ):
     """
     Args:
@@ -119,6 +118,7 @@ def train_loop(
         start_time = time.time()
 
         train_losses_this_epoch = list()
+        l1_losses_this_epoch = list()
         mle_losses_this_epoch = list()
         duration_losses_this_epoch = list()
         pitch_losses_this_epoch = list()
@@ -135,6 +135,7 @@ def train_loop(
                 (
                     train_loss,
                     output_spectrograms,
+                    l1_loss,
                     mle_loss,
                     duration_loss,
                     pitch_loss,
@@ -169,6 +170,7 @@ def train_loop(
                     )
 
                 train_losses_this_epoch.append(train_loss.item())
+                l1_losses_this_epoch.append(l1_loss.item())
                 mle_losses_this_epoch.append(mle_loss.item())
                 duration_losses_this_epoch.append(duration_loss.item())
                 pitch_losses_this_epoch.append(pitch_loss.item())
@@ -204,6 +206,11 @@ def train_loop(
         train_loss_epoch = (
             sum(train_losses_this_epoch) / len(train_losses_this_epoch)
             if len(train_losses_this_epoch) > 0
+            else 0.0
+        )
+        l1_loss_epoch = (
+            sum(l1_losses_this_epoch) / len(l1_losses_this_epoch)
+            if len(l1_losses_this_epoch) > 0
             else 0.0
         )
         mle_loss_epoch = (
@@ -287,8 +294,9 @@ def train_loop(
 
         print(f"\nSteps: {step_counter}")
         print(
-            "Training Loss: {} - MLE Loss: {} - Duration Loss: {} - Pitch Loss: {} - Energy Loss: {} - Cycle Loss: {}".format(
+            "Training Loss: {:.5f} - L1 Loss: {:.5f} - MLE Loss: {:.5f} - Duration Loss: {:.5f} - Pitch Loss: {:.5f} - Energy Loss: {:.5f} - Cycle Loss: {:.5f}".format(
                 train_loss_epoch,
+                l1_loss_epoch,
                 mle_loss_epoch,
                 duration_loss_epoch,
                 pitch_loss_epoch,
@@ -305,6 +313,7 @@ def train_loop(
             wandb.log(
                 {
                     "Training_loss": train_loss_epoch,
+                    "L1_loss": l1_loss_epoch,
                     "MLE_loss": mle_loss_epoch,
                     "Duration_loss": duration_loss_epoch,
                     "Pitch_loss": pitch_loss_epoch,

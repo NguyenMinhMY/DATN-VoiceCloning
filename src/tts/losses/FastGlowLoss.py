@@ -37,12 +37,14 @@ class FastGlowLoss(torch.nn.Module):
 
     def forward(
         self,
+        mel_outs,
         z_outs,
         z_mean_outs,
         z_std_outs,
         d_outs,
         p_outs,
         e_outs,
+        ys,
         ds,
         ps,
         es,
@@ -52,12 +54,14 @@ class FastGlowLoss(torch.nn.Module):
     ):
         """
         Args:
+            mel_outs (Tensor): Batch of outputs after postnets (B, Lmax, odim).
             z_outs (Tensor): Batch of outputs of the latent variable z (B, Lmax, odim).
             z_mean_outs (Tensor): Batch of outputs of the latent variable z_mean (B, Lmax, odim).
             z_std_outs (Tensor): Batch of outputs of the latent variable z_std (B, Lmax, odim).
             d_outs (LongTensor): Batch of outputs of duration predictor (B, Tmax).
             p_outs (Tensor): Batch of outputs of pitch predictor (B, Lmax, 1).
             e_outs (Tensor): Batch of outputs of energy predictor (B, Lmax, 1).
+            ys (Tensor): Batch of target features (B, Lmax, odim).
             ds (LongTensor): Batch of durations (B, Tmax).
             ps (Tensor): Batch of target token-averaged pitch (B, Lmax, 1).
             es (Tensor): Batch of target token-averaged energy (B, Lmax, 1).
@@ -79,8 +83,10 @@ class FastGlowLoss(torch.nn.Module):
             ds = ds.masked_select(in_masks)
 
             out_masks = make_non_pad_mask(olens).unsqueeze(-1).to(ilens.device)
+            mel_outs = mel_outs.masked_select(out_masks)
             p_outs = p_outs.masked_select(out_masks)
             e_outs = e_outs.masked_select(out_masks)
+            ys = ys.masked_select(out_masks)
             ps = ps.masked_select(out_masks)
             es = es.masked_select(out_masks)
 
@@ -93,7 +99,7 @@ class FastGlowLoss(torch.nn.Module):
         log_mle = self.constant_factor + (pz - torch.sum(logdet)) / (
             torch.sum(olens) * z_outs.shape[2]
         )
-
+        l1_loss = self.l1_criterion(mel_outs, ys)
         duration_loss = self.duration_criterion(d_outs, ds)  # [B, Tmax]
         pitch_loss = self.mse_criterion(p_outs, ps)  # [B, Lmax, 1]
         energy_loss = self.mse_criterion(e_outs, es)  # [B, Lmax, 1]
@@ -110,7 +116,8 @@ class FastGlowLoss(torch.nn.Module):
             out_weights /= z_outs.size(0)  # [B, Lmax]
             out_masks = out_masks.unsqueeze(-1)  # [B, Lmax, 1]
             out_weights = out_weights.unsqueeze(-1)  # [B, Lmax, 1]
+            l1_loss = l1_loss.mul(out_weights).masked_select(out_masks).sum()
             pitch_loss = pitch_loss.mul(out_weights).masked_select(out_masks).sum()
             energy_loss = energy_loss.mul(out_weights).masked_select(out_masks).sum()
 
-        return log_mle, duration_loss, pitch_loss, energy_loss
+        return l1_loss, log_mle, duration_loss, pitch_loss, energy_loss
