@@ -244,6 +244,24 @@ class FastGlow2(torch.nn.Module, ABC):
             olens=speech_lengths.float(),
             logdet=logdet.float(),
         )
+        
+        # ignore loss when its value is nan or inf
+        if l1_loss.isnan() or l1_loss.isinf():
+            print("L1 loss is NaN or Inf")
+            l1_loss.zero_()
+        if mle_loss.isnan() or mle_loss.isinf():
+            print("MLE loss is NaN or Inf")
+            mle_loss.zero_()
+        if duration_loss.isnan() or duration_loss.isinf():
+            print("Duration loss is NaN or Inf")
+            duration_loss.zero_()
+        if pitch_loss.isnan() or pitch_loss.isinf():
+            print("Pitch loss is NaN or Inf")
+            pitch_loss.zero_()
+        if energy_loss.isnan() or energy_loss.isinf():
+            print("Energy loss is NaN or Inf")
+            energy_loss.zero_()
+        
         loss = l1_loss + mle_loss + duration_loss + pitch_loss + energy_loss
 
         if return_mels:
