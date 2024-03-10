@@ -287,6 +287,8 @@ class FastGlow2(torch.nn.Module, ABC):
         logdet = None
         speech_masks = None
         mas_durations = None
+        encoded_frames_mean = None
+        encoded_frames_std = None
 
         if is_inference:
             predicted_durations = self.duration_predictor.inference(
@@ -296,15 +298,15 @@ class FastGlow2(torch.nn.Module, ABC):
             speech_lens = predicted_durations.sum(dim=-1)
             style_masks = make_pad_mask(speech_lens, device=text_lens.device).unsqueeze(-1) # [B, Lmax, 1]
             
-            encoded_texts_mean = self.length_regulator(
+            encoded_frames_mean = self.length_regulator(
                 encoded_texts_mean, predicted_durations, alpha
             )  # [B, Lmax, odim]
             
-            encoded_texts_std = self.length_regulator(
+            encoded_frames_std = self.length_regulator(
                 encoded_texts_std, predicted_durations, alpha
             )   # [B, Lmax, odim]
             
-            z_p = encoded_texts_mean + torch.exp(encoded_texts_std) * torch.randn_like(encoded_texts_mean) # [B, Lmax, odim]
+            z_p = encoded_frames_mean + torch.exp(encoded_frames_std) * torch.randn_like(encoded_frames_mean) # [B, Lmax, odim]
             
             embedded_curve, pitch_predictions, energy_predictions = self.style_adaptor(
                 xs=z_p,
@@ -352,17 +354,17 @@ class FastGlow2(torch.nn.Module, ABC):
                 z_mask=speech_masks,
             ) # [B, Tmax]
 
-            # forward path
-            encoded_texts_mean = self.length_regulator(
+            encoded_frames_mean = self.length_regulator(
                 encoded_texts_mean, mas_durations, alpha
             )  # [B, Lmax, odim]
             
-            encoded_texts_std = self.length_regulator(
+            encoded_frames_std = self.length_regulator(
                 encoded_texts_std, mas_durations, alpha
             )   # [B, Lmax, odim]
             
-            z_p_forward = encoded_texts_mean + torch.exp(encoded_texts_std) * torch.randn_like(encoded_texts_mean) # [B, Lmax, odim]
-            z = z_p_forward + embedded_curve  # [B, Lmax, odim]
+            # forward path
+            _z_p = encoded_frames_mean + torch.exp(encoded_frames_std) * torch.randn_like(encoded_frames_mean) # [B, Lmax, odim]
+            z = _z_p + embedded_curve  # [B, Lmax, odim]
 
         ys, _ = self.decoder(
             z.transpose(1, 2),
@@ -375,8 +377,8 @@ class FastGlow2(torch.nn.Module, ABC):
         return (
             ys,
             z_p,
-            encoded_texts_mean,
-            encoded_texts_std,
+            encoded_frames_mean,
+            encoded_frames_std,
             predicted_durations,
             pitch_predictions,
             energy_predictions,
