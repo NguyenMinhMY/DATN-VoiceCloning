@@ -67,7 +67,7 @@ class InvConvNear(nn.Module):
                 logdet = torch.logdet(self.weight) * (c / self.num_splits) * x_len  # [b]
 
         weight = weight.view(self.num_splits, self.num_splits, 1, 1)
-        z = F.conv2d(x, weight) / (self.num_splits * self.num_splits)
+        z = F.conv2d(x, weight)
 
         z = z.view(b, 2, self.num_splits // 2, c // self.num_splits, t)
         z = z.permute(0, 1, 3, 2, 4).contiguous().view(b, c, t) * x_mask

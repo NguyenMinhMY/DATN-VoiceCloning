@@ -362,8 +362,8 @@ class FastGlow2(torch.nn.Module, ABC):
             z_p = z - embedded_curve  # [B, Lmax, odim]
             
             mas_durations = self._calc_duration_using_mas(
-                x_s=encoded_texts_mean,
-                x_m=encoded_texts_std,
+                x_m=encoded_texts_mean,
+                x_s=encoded_texts_std,
                 z=z_p,
                 x_mask=text_masks,
                 z_mask=speech_masks,
