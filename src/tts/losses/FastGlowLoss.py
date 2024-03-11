@@ -116,8 +116,17 @@ class FastGlowLoss(torch.nn.Module):
             out_weights /= z_outs.size(0)  # [B, Lmax]
             out_masks = out_masks.unsqueeze(-1)  # [B, Lmax, 1]
             out_weights = out_weights.unsqueeze(-1)  # [B, Lmax, 1]
-            l1_loss = l1_loss.mul(out_weights).masked_select(out_masks).sum()
             pitch_loss = pitch_loss.mul(out_weights).masked_select(out_masks).sum()
             energy_loss = energy_loss.mul(out_weights).masked_select(out_masks).sum()
+            
+            mel_masks = make_non_pad_mask(olens).unsqueeze(-1).to(ys.device)
+            mel_masks = torch.nn.functional.pad(
+                mel_masks.transpose(1, 2),
+                [0, ys.size(1) - mel_masks.size(1), 0, 0, 0, 0],
+                value=False,
+            ).transpose(1, 2)
+            mel_weights = mel_masks.float() / mel_masks.sum(dim=1, keepdim=True).float()
+            mel_weights /= ys.size(0) * ys.size(2)
+            l1_loss = l1_loss.mul(mel_weights).masked_select(mel_masks).sum()
 
         return l1_loss, log_mle, duration_loss, pitch_loss, energy_loss
