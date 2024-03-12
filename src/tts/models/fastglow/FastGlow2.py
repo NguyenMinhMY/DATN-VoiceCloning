@@ -246,8 +246,8 @@ class FastGlow2(torch.nn.Module, ABC):
         
         loss = 0.0
         # ignore loss when its value is nan or inf
-        if not (l1_loss.isnan() or l1_loss.isinf()):
-            loss += l1_loss
+        # if not (l1_loss.isnan() or l1_loss.isinf()):
+        #     loss += l1_loss
         if not (mle_loss.isnan() or mle_loss.isinf()):
             loss += mle_loss
         if not (duration_loss.isnan() or duration_loss.isinf()):
