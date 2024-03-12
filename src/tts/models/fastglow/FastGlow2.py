@@ -168,12 +168,12 @@ class FastGlow2(torch.nn.Module, ABC):
             c_in_channels=utt_embed_dim,
         )
 
-        # initialize parameters
-        self._reset_parameters(
-            init_type=init_type,
-            init_enc_alpha=init_enc_alpha,
-            init_dec_alpha=init_dec_alpha,
-        )
+        # # initialize parameters
+        # self._reset_parameters(
+        #     init_type=init_type,
+        #     init_enc_alpha=init_enc_alpha,
+        #     init_dec_alpha=init_dec_alpha,
+        # )
 
         # define criterion
         self.criterion = FastGlowLoss(
