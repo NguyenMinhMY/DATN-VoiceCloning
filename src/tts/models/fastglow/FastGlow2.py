@@ -48,22 +48,6 @@ class FastGlow2(torch.nn.Module, ABC):
         duration_predictor_layers=2,
         duration_predictor_chans=256,
         duration_predictor_kernel_size=3,
-        # energy predictor
-        energy_predictor_layers=2,
-        energy_predictor_chans=256,
-        energy_predictor_kernel_size=3,
-        energy_predictor_dropout=0.5,
-        energy_embed_kernel_size=1,
-        energy_embed_dropout=0.0,
-        stop_gradient_from_energy_predictor=False,
-        # pitch predictor
-        pitch_predictor_layers=5,
-        pitch_predictor_chans=256,
-        pitch_predictor_kernel_size=5,
-        pitch_predictor_dropout=0.5,
-        pitch_embed_kernel_size=1,
-        pitch_embed_dropout=0.0,
-        stop_gradient_from_pitch_predictor=False,
         # training related
         transformer_enc_dropout_rate=0.2,
         transformer_enc_positional_dropout_rate=0.2,
@@ -86,8 +70,6 @@ class FastGlow2(torch.nn.Module, ABC):
         self.adim = adim
         self.eos = 1
         # self.reduction_factor = reduction_factor
-        self.stop_gradient_from_pitch_predictor = stop_gradient_from_pitch_predictor
-        self.stop_gradient_from_energy_predictor = stop_gradient_from_energy_predictor
         self.use_scaled_pos_enc = use_scaled_pos_enc
         self.multilingual_model = lang_embs is not None
         self.multispeaker_model = utt_embed_dim is not None
@@ -125,25 +107,6 @@ class FastGlow2(torch.nn.Module, ABC):
             kernel_size=duration_predictor_kernel_size,
             dropout_rate=duration_predictor_dropout_rate,
             utt_embed_dim=utt_embed_dim,
-        )
-
-        # define style adaptor
-        self.style_adaptor = StyleAdaptor2(
-            idim=odim,
-            # pitch predictor
-            pitch_predictor_layers=pitch_predictor_layers,
-            pitch_predictor_chans=pitch_predictor_chans,
-            pitch_predictor_kernel_size=pitch_predictor_kernel_size,
-            pitch_predictor_dropout=pitch_predictor_dropout,
-            pitch_embed_kernel_size=pitch_embed_kernel_size,
-            pitch_embed_dropout=pitch_embed_dropout,
-            # energy predictor
-            energy_predictor_layers=energy_predictor_layers,
-            energy_predictor_chans=energy_predictor_chans,
-            energy_predictor_kernel_size=energy_predictor_kernel_size,
-            energy_predictor_dropout=energy_predictor_dropout,
-            energy_embed_kernel_size=energy_embed_kernel_size,
-            energy_embed_dropout=energy_embed_dropout,
         )
 
         # define style adaptor's project layer
@@ -186,8 +149,6 @@ class FastGlow2(torch.nn.Module, ABC):
         text_lengths,
         gold_speech,
         speech_lengths,
-        gold_pitch,
-        gold_energy,
         utterance_embedding,
         return_mels=False,
         lang_ids=None,
@@ -218,48 +179,37 @@ class FastGlow2(torch.nn.Module, ABC):
             text_lens=text_lengths,
             gold_speech=gold_speech,
             speech_lens=speech_lengths,
-            gold_pitch=gold_pitch,
-            gold_energy=gold_energy,
             is_inference=False,
             utterance_embedding=utterance_embedding,
             lang_ids=lang_ids,
         )
-        mel_outs, z_outs, z_mean_outs, z_std_outs, d_outs, p_outs, e_outs, mas_outs, logdet = fs_outs
+        mel_outs, z_outs, z_mean_outs, z_std_outs, d_outs, mas_outs, logdet = fs_outs
         
         # calculate loss
-        l1_loss, mle_loss, duration_loss, pitch_loss, energy_loss = self.criterion(
+        l1_loss, mle_loss, duration_loss = self.criterion(
             mel_outs=mel_outs.float(),
             z_outs=z_outs.float(), 
             z_mean_outs=z_mean_outs.float(), 
             z_std_outs=z_std_outs.float(),
             d_outs=d_outs.float(),
-            p_outs=p_outs.float(),
-            e_outs=e_outs.float(),
             ys=gold_speech,
             ds=mas_outs.float(),
-            ps=gold_pitch.float(),
-            es=gold_energy.float(),
             ilens=text_lengths.float(),
             olens=speech_lengths.float(),
             logdet=logdet.float(),
         )
         
         loss = 0.0
-        # ignore loss when its value is nan or inf
-        # if not (l1_loss.isnan() or l1_loss.isinf()):
-        #     loss += l1_loss
+        if not (l1_loss.isnan() or l1_loss.isinf()):
+            loss += l1_loss
         if not (mle_loss.isnan() or mle_loss.isinf()):
             loss += mle_loss
         if not (duration_loss.isnan() or duration_loss.isinf()):
             loss += duration_loss
-        if not (pitch_loss.isnan() or pitch_loss.isinf()):
-            loss += pitch_loss
-        if not (energy_loss.isnan() or energy_loss.isinf()):
-            loss += energy_loss
 
         if return_mels:
-            return loss, mel_outs, l1_loss, mle_loss, duration_loss, pitch_loss, energy_loss
-        return loss, l1_loss, mle_loss, duration_loss, pitch_loss, energy_loss
+            return loss, mel_outs, l1_loss, mle_loss, duration_loss
+        return loss, l1_loss, mle_loss, duration_loss
 
     def _forward(
         self,
@@ -267,8 +217,6 @@ class FastGlow2(torch.nn.Module, ABC):
         text_lens,
         gold_speech=None,
         speech_lens=None,
-        gold_pitch=None,
-        gold_energy=None,
         is_inference=False,
         alpha=1.0,
         utterance_embedding=None,
@@ -319,17 +267,7 @@ class FastGlow2(torch.nn.Module, ABC):
                 encoded_texts_std, predicted_durations, alpha
             )   # [B, Lmax, odim]
             
-            z_p = encoded_frames_mean + torch.exp(encoded_frames_std) * torch.randn_like(encoded_frames_mean) # [B, Lmax, odim]
-            
-            embedded_curve, pitch_predictions, energy_predictions = self.style_adaptor(
-                xs=z_p,
-                padding_mask=style_masks,
-                gold_pitch=None,
-                gold_energy=None,
-                is_inference=True,
-            ) # [B, Lmax, odim]
-
-            z = z_p + embedded_curve  # [B, Lmax, adim]
+            z = encoded_frames_mean + torch.exp(encoded_frames_std) * torch.randn_like(encoded_frames_mean) # [B, Lmax, odim]
 
             speech_masks = self._source_mask(speech_lens)  # [B, 1, Lmax]
 
@@ -349,20 +287,11 @@ class FastGlow2(torch.nn.Module, ABC):
                 reverse=False,
             )
             z = z.transpose(1, 2) # [B, Lmax, odim]
-
-            embedded_curve, pitch_predictions, energy_predictions = self.style_adaptor(
-                xs=z.detach(),
-                padding_mask=style_masks,
-                gold_pitch=gold_pitch,
-                gold_energy=gold_energy,
-                is_inference=False,
-            )
-            z_p = z - embedded_curve  # [B, Lmax, odim]
             
             mas_durations = self._calc_duration_using_mas(
                 x_m=encoded_texts_mean,
                 x_s=encoded_texts_std,
-                z=z_p,
+                z=z,
                 x_mask=text_masks,
                 z_mask=speech_masks,
             ) # [B, Tmax]
@@ -376,8 +305,7 @@ class FastGlow2(torch.nn.Module, ABC):
             )   # [B, Lmax, odim]
             
             # forward path
-            _z_p = encoded_frames_mean + torch.exp(encoded_frames_std) * torch.randn_like(encoded_frames_mean) # [B, Lmax, odim]
-            z = _z_p + embedded_curve  # [B, Lmax, odim]
+            z = encoded_frames_mean + torch.exp(encoded_frames_std) * torch.randn_like(encoded_frames_mean) # [B, Lmax, odim]
 
         ys, _ = self.decoder(
             z.transpose(1, 2),
@@ -389,12 +317,10 @@ class FastGlow2(torch.nn.Module, ABC):
 
         return (
             ys,
-            z_p,
+            z,
             encoded_frames_mean,
             encoded_frames_std,
             predicted_durations,
-            pitch_predictions,
-            energy_predictions,
             mas_durations,
             logdet
         )
@@ -429,10 +355,10 @@ class FastGlow2(torch.nn.Module, ABC):
             lang_ids=lang_ids,
         )
         
-        mel_outs, _, _, _, d_outs, p_outs, e_outs, _, _ = fs_outs
+        mel_outs, _, _, _, d_outs, _, _ = fs_outs
         
         if return_duration_pitch_energy:
-            return mel_outs, d_outs, p_outs, e_outs
+            return mel_outs, d_outs
         return mel_outs
 
     def _source_mask(self, ilens):

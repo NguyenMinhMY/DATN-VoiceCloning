@@ -42,12 +42,8 @@ class FastGlowLoss(torch.nn.Module):
         z_mean_outs,
         z_std_outs,
         d_outs,
-        p_outs,
-        e_outs,
         ys,
         ds,
-        ps,
-        es,
         ilens,
         olens,
         logdet,
@@ -84,11 +80,7 @@ class FastGlowLoss(torch.nn.Module):
 
             out_masks = make_non_pad_mask(olens).unsqueeze(-1).to(ilens.device)
             mel_outs = mel_outs.masked_select(out_masks)
-            p_outs = p_outs.masked_select(out_masks)
-            e_outs = e_outs.masked_select(out_masks)
             ys = ys.masked_select(out_masks)
-            ps = ps.masked_select(out_masks)
-            es = es.masked_select(out_masks)
 
         # calculate loss
 
@@ -101,8 +93,6 @@ class FastGlowLoss(torch.nn.Module):
         )
         l1_loss = self.l1_criterion(mel_outs, ys)
         duration_loss = self.duration_criterion(d_outs, ds)  # [B, Tmax]
-        pitch_loss = self.mse_criterion(p_outs, ps)  # [B, Lmax, 1]
-        energy_loss = self.mse_criterion(e_outs, es)  # [B, Lmax, 1]
 
         # make weighted mask and apply it
         if self.use_weighted_masking:
@@ -116,8 +106,6 @@ class FastGlowLoss(torch.nn.Module):
             out_weights /= z_outs.size(0)  # [B, Lmax]
             out_masks = out_masks.unsqueeze(-1)  # [B, Lmax, 1]
             out_weights = out_weights.unsqueeze(-1)  # [B, Lmax, 1]
-            pitch_loss = pitch_loss.mul(out_weights).masked_select(out_masks).sum()
-            energy_loss = energy_loss.mul(out_weights).masked_select(out_masks).sum()
             
             mel_masks = make_non_pad_mask(olens).unsqueeze(-1).to(ys.device)
             mel_masks = torch.nn.functional.pad(
@@ -129,4 +117,4 @@ class FastGlowLoss(torch.nn.Module):
             mel_weights /= ys.size(0) * ys.size(2)
             l1_loss = l1_loss.mul(mel_weights).masked_select(mel_masks).sum()
 
-        return l1_loss, log_mle, duration_loss, pitch_loss, energy_loss
+        return l1_loss, log_mle, duration_loss

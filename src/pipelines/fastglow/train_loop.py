@@ -126,8 +126,6 @@ def train_loop(
         l1_losses_this_epoch = list()
         mle_losses_this_epoch = list()
         duration_losses_this_epoch = list()
-        pitch_losses_this_epoch = list()
-        energy_losses_this_epoch = list()
         cycle_losses_this_epoch = list()
         for batch in tqdm(train_loader):
             if batch_counter < init_act_norm_steps:
@@ -143,8 +141,6 @@ def train_loop(
                         text_lengths=batch[1].to(device),
                         gold_speech=batch[2].to(device),
                         speech_lengths=batch[3].to(device),
-                        gold_energy=batch[4].to(device),
-                        gold_pitch=batch[5].to(device),
                         utterance_embedding=style_embedding_of_gold.detach(),
                         lang_ids=batch[7].to(device),
                         return_mels=True,
@@ -164,15 +160,11 @@ def train_loop(
                         l1_loss,
                         mle_loss,
                         duration_loss,
-                        pitch_loss,
-                        energy_loss,
                     ) = net(
                         text_tensors=batch[0].to(device),
                         text_lengths=batch[1].to(device),
                         gold_speech=batch[2].to(device),
                         speech_lengths=batch[3].to(device),
-                        gold_energy=batch[4].to(device),
-                        gold_pitch=batch[5].to(device),
                         utterance_embedding=style_embedding_of_gold.detach(),
                         lang_ids=batch[7].to(device),
                         return_mels=True,
@@ -199,8 +191,6 @@ def train_loop(
                     l1_losses_this_epoch.append(l1_loss.item())
                     mle_losses_this_epoch.append(mle_loss.item())
                     duration_losses_this_epoch.append(duration_loss.item())
-                    pitch_losses_this_epoch.append(pitch_loss.item())
-                    energy_losses_this_epoch.append(energy_loss.item())
                     cycle_losses_this_epoch.append(cycle_dist.item())
 
                     if step_counter <= phase_1_steps:
@@ -248,16 +238,6 @@ def train_loop(
         duration_loss_epoch = (
             sum(duration_losses_this_epoch) / len(duration_losses_this_epoch)
             if len(duration_losses_this_epoch) > 0
-            else 0.0
-        )
-        pitch_loss_epoch = (
-            sum(pitch_losses_this_epoch) / len(pitch_losses_this_epoch)
-            if len(pitch_losses_this_epoch) > 0
-            else 0.0
-        )
-        energy_loss_epoch = (
-            sum(energy_losses_this_epoch) / len(energy_losses_this_epoch)
-            if len(energy_losses_this_epoch) > 0
             else 0.0
         )
         cycle_loss_epoch = (
@@ -321,13 +301,11 @@ def train_loop(
 
         print(f"\nSteps: {step_counter}")
         print(
-            "Training Loss: {:.5f} - Mel Loss: {:.5f} - MLE Loss: {:.5f} - Duration Loss: {:.5f} - Pitch Loss: {:.5f} - Energy Loss: {:.5f} - Cycle Loss: {:.5f}".format(
+            "Training Loss: {:.5f} - Mel Loss: {:.5f} - MLE Loss: {:.5f} - Duration Loss: {:.5f} - Cycle Loss: {:.5f}".format(
                 train_loss_epoch,
                 l1_loss_epoch,
                 mle_loss_epoch,
                 duration_loss_epoch,
-                pitch_loss_epoch,
-                energy_loss_epoch,
                 cycle_loss_epoch,
             )
         )
@@ -343,8 +321,6 @@ def train_loop(
                     "L1_loss": l1_loss_epoch,
                     "MLE_loss": mle_loss_epoch,
                     "Duration_loss": duration_loss_epoch,
-                    "Pitch_loss": pitch_loss_epoch,
-                    "Energy_loss": energy_loss_epoch,
                     "Cycle_loss": cycle_loss_epoch,
                     "Steps": step_counter,
                     # "progress_plot": wandb.Image(path_to_most_recent_plot),
