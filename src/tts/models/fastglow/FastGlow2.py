@@ -149,7 +149,6 @@ class FastGlow2(torch.nn.Module, ABC):
         # define style adaptor's project layer
         self.proj_m = torch.nn.Conv1d(adim, odim, 1)
         self.proj_s = torch.nn.Conv1d(adim, odim, 1)
-        self.proj_dec = torch.nn.Conv1d(adim, odim, 1)
 
         # define length regulator
         self.length_regulator = LengthRegulator()
@@ -169,12 +168,12 @@ class FastGlow2(torch.nn.Module, ABC):
             c_in_channels=utt_embed_dim,
         )
 
-        # initialize parameters
-        self._reset_parameters(
-            init_type=init_type,
-            init_enc_alpha=init_enc_alpha,
-            init_dec_alpha=init_dec_alpha,
-        )
+        # # initialize parameters
+        # self._reset_parameters(
+        #     init_type=init_type,
+        #     init_enc_alpha=init_enc_alpha,
+        #     init_dec_alpha=init_dec_alpha,
+        # )
 
         # define criterion
         self.criterion = FastGlowLoss(
@@ -215,26 +214,28 @@ class FastGlow2(torch.nn.Module, ABC):
 
         # forward propagation
         fs_outs = self._forward(
-            text_tensors,
-            text_lengths,
-            gold_speech,
-            speech_lengths,
-            gold_pitch,
-            gold_energy,
-            utterance_embedding=utterance_embedding,
+            text_tensors=text_tensors,
+            text_lens=text_lengths,
+            gold_speech=gold_speech,
+            speech_lens=speech_lengths,
+            gold_pitch=gold_pitch,
+            gold_energy=gold_energy,
             is_inference=False,
+            utterance_embedding=utterance_embedding,
             lang_ids=lang_ids,
         )
         mel_outs, z_outs, z_mean_outs, z_std_outs, d_outs, p_outs, e_outs, mas_outs, logdet = fs_outs
         
         # calculate loss
-        mle_loss, duration_loss, pitch_loss, energy_loss = self.criterion(
+        l1_loss, mle_loss, duration_loss, pitch_loss, energy_loss = self.criterion(
+            mel_outs=mel_outs.float(),
             z_outs=z_outs.float(), 
             z_mean_outs=z_mean_outs.float(), 
             z_std_outs=z_std_outs.float(),
             d_outs=d_outs.float(),
             p_outs=p_outs.float(),
             e_outs=e_outs.float(),
+            ys=gold_speech,
             ds=mas_outs.float(),
             ps=gold_pitch.float(),
             es=gold_energy.float(),
@@ -242,11 +243,23 @@ class FastGlow2(torch.nn.Module, ABC):
             olens=speech_lengths.float(),
             logdet=logdet.float(),
         )
-        loss = mle_loss + duration_loss + pitch_loss + energy_loss
+        
+        loss = 0.0
+        # ignore loss when its value is nan or inf
+        # if not (l1_loss.isnan() or l1_loss.isinf()):
+        #     loss += l1_loss
+        if not (mle_loss.isnan() or mle_loss.isinf()):
+            loss += mle_loss
+        if not (duration_loss.isnan() or duration_loss.isinf()):
+            loss += duration_loss
+        if not (pitch_loss.isnan() or pitch_loss.isinf()):
+            loss += pitch_loss
+        if not (energy_loss.isnan() or energy_loss.isinf()):
+            loss += energy_loss
 
         if return_mels:
-            return loss, mel_outs, mle_loss, duration_loss, pitch_loss, energy_loss
-        return loss, mle_loss, duration_loss, pitch_loss, energy_loss
+            return loss, mel_outs, l1_loss, mle_loss, duration_loss, pitch_loss, energy_loss
+        return loss, l1_loss, mle_loss, duration_loss, pitch_loss, energy_loss
 
     def _forward(
         self,
@@ -347,8 +360,8 @@ class FastGlow2(torch.nn.Module, ABC):
             z_p = z - embedded_curve  # [B, Lmax, odim]
             
             mas_durations = self._calc_duration_using_mas(
-                x_s=encoded_texts_mean,
-                x_m=encoded_texts_std,
+                x_m=encoded_texts_mean,
+                x_s=encoded_texts_std,
                 z=z_p,
                 x_mask=text_masks,
                 z_mask=speech_masks,
@@ -451,9 +464,9 @@ class FastGlow2(torch.nn.Module, ABC):
             LongTensor: [B, Tmax+1]
         """
 
-        x_m = torch.transpose(x_m, 1, 2)  # [B, odim, Tmax]
-        x_s = torch.transpose(x_s, 1, 2)  # [B, odim, Tmax]
-        z = torch.transpose(z, 1, 2)  # [B, odim, Lmax]
+        x_m = x_m.transpose(1,2)  # [B, odim, Tmax]
+        x_s = x_s.transpose(1,2)  # [B, odim, Tmax]
+        z   = z.transpose(1,2)  # [B, odim, Lmax]
 
         attn_mask = torch.unsqueeze(x_mask, -1) * torch.unsqueeze(
             z_mask, 2
@@ -483,3 +496,15 @@ class FastGlow2(torch.nn.Module, ABC):
         # initialize parameters
         if init_type != "pytorch":
             initialize(self, init_type)
+
+    def unlock_act_norm_layers(self):
+        """Unlock activation normalization layers for data depended initalization."""
+        for f in self.decoder.flows:
+            if getattr(f, "set_ddi", False):
+                f.set_ddi(True)
+
+    def lock_act_norm_layers(self):
+        """Lock activation normalization layers."""
+        for f in self.decoder.flows:
+            if getattr(f, "set_ddi", False):
+                f.set_ddi(False)

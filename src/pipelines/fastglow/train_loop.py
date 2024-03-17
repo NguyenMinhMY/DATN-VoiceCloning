@@ -17,9 +17,7 @@ from src.utility.utils import get_most_recent_checkpoint
 from src.utility.utils import plot_progress_spec, clip_grad_norm_
 from src.utility.warmup_scheduler import WarmupScheduler
 from src.spk_embedding.StyleEmbedding import StyleEmbedding
-from src.tts.models.fastglow.FastGlow import FastGlow
-
-
+from src.tts.models.fastglow.FastGlow2 import FastGlow2
 
 
 def collate_and_pad(batch):
@@ -35,8 +33,9 @@ def collate_and_pad(batch):
         torch.stack([datapoint[7] for datapoint in batch]),
     )
 
+
 def train_loop(
-    net: FastGlow,
+    net: FastGlow2,
     train_dataset,
     device,
     save_directory,
@@ -49,10 +48,11 @@ def train_loop(
     path_to_embed_model=os.path.join(MODELS_DIR, "Embedding", "embedding_function.pt"),
     fine_tune=False,
     resume=False,
+    init_act_norm_steps=10,
     phase_1_steps=100000,
     phase_2_steps=100000,
     use_wandb=False,
-    enable_autocast=True
+    enable_autocast=True,
 ):
     """
     Args:
@@ -112,98 +112,132 @@ def train_loop(
             scheduler.load_state_dict(check_dict["scheduler"])
             scaler.load_state_dict(check_dict["scaler"])
 
+    net.train()
+
     best_train_loss = float("inf")
     best_cycle_loss = float("inf")
 
+    print("Starting training")
     for step_counter in range(step_counter + 1, steps + 1):
         start_time = time.time()
+        batch_counter = 0
 
         train_losses_this_epoch = list()
+        l1_losses_this_epoch = list()
         mle_losses_this_epoch = list()
         duration_losses_this_epoch = list()
         pitch_losses_this_epoch = list()
         energy_losses_this_epoch = list()
         cycle_losses_this_epoch = list()
         for batch in tqdm(train_loader):
-            with autocast(enabled=enable_autocast, cache_enabled=False):
-                style_embedding_function.eval()
-                style_embedding_of_gold, out_list_gold = style_embedding_function(
-                    batch_of_spectrograms=batch[2].to(device),
-                    batch_of_spectrogram_lengths=batch[3].to(device),
-                    return_all_outs=True,
-                )
-                (
-                    train_loss,
-                    output_spectrograms,
-                    mle_loss,
-                    duration_loss,
-                    pitch_loss,
-                    energy_loss,
-                ) = net(
-                    text_tensors=batch[0].to(device),
-                    text_lengths=batch[1].to(device),
-                    gold_speech=batch[2].to(device),
-                    speech_lengths=batch[3].to(device),
-                    gold_energy=batch[4].to(device),
-                    gold_pitch=batch[5].to(device),
-                    utterance_embedding=style_embedding_of_gold.detach(),
-                    lang_ids=batch[7].to(device),
-                    return_mels=True,
-                )
-                style_embedding_function.gst.ref_enc.gst.train()
-                (
-                    style_embedding_of_predicted,
-                    out_list_predicted,
-                ) = style_embedding_function(
-                    batch_of_spectrograms=output_spectrograms,
-                    batch_of_spectrogram_lengths=batch[3].to(device),
-                    return_all_outs=True,
-                )
-
-                cycle_dist = 0
-                for out_gold, out_pred in zip(out_list_gold, out_list_predicted):
-                    # essentially feature matching, as is often done in vocoder training,
-                    # since we're essentially dealing with a discriminator here.
-                    cycle_dist = cycle_dist + torch.nn.functional.l1_loss(
-                        out_pred, out_gold.detach()
+            if batch_counter < init_act_norm_steps:
+                net.unlock_act_norm_layers()
+                with torch.no_grad():
+                    style_embedding_of_gold, _ = style_embedding_function(
+                        batch_of_spectrograms=batch[2].to(device),
+                        batch_of_spectrogram_lengths=batch[3].to(device),
+                        return_all_outs=True,
+                    )
+                    _ = net(
+                        text_tensors=batch[0].to(device),
+                        text_lengths=batch[1].to(device),
+                        gold_speech=batch[2].to(device),
+                        speech_lengths=batch[3].to(device),
+                        gold_energy=batch[4].to(device),
+                        gold_pitch=batch[5].to(device),
+                        utterance_embedding=style_embedding_of_gold.detach(),
+                        lang_ids=batch[7].to(device),
+                        return_mels=True,
+                    )
+                net.lock_act_norm_layers()
+            else:
+                with autocast(enabled=enable_autocast, cache_enabled=False):
+                    style_embedding_function.eval()
+                    style_embedding_of_gold, out_list_gold = style_embedding_function(
+                        batch_of_spectrograms=batch[2].to(device),
+                        batch_of_spectrogram_lengths=batch[3].to(device),
+                        return_all_outs=True,
+                    )
+                    (
+                        train_loss,
+                        output_spectrograms,
+                        l1_loss,
+                        mle_loss,
+                        duration_loss,
+                        pitch_loss,
+                        energy_loss,
+                    ) = net(
+                        text_tensors=batch[0].to(device),
+                        text_lengths=batch[1].to(device),
+                        gold_speech=batch[2].to(device),
+                        speech_lengths=batch[3].to(device),
+                        gold_energy=batch[4].to(device),
+                        gold_pitch=batch[5].to(device),
+                        utterance_embedding=style_embedding_of_gold.detach(),
+                        lang_ids=batch[7].to(device),
+                        return_mels=True,
+                    )
+                    style_embedding_function.gst.ref_enc.gst.train()
+                    (
+                        style_embedding_of_predicted,
+                        out_list_predicted,
+                    ) = style_embedding_function(
+                        batch_of_spectrograms=output_spectrograms,
+                        batch_of_spectrogram_lengths=batch[3].to(device),
+                        return_all_outs=True,
                     )
 
-                train_losses_this_epoch.append(train_loss.item())
-                mle_losses_this_epoch.append(mle_loss.item())
-                duration_losses_this_epoch.append(duration_loss.item())
-                pitch_losses_this_epoch.append(pitch_loss.item())
-                energy_losses_this_epoch.append(energy_loss.item())
-                cycle_losses_this_epoch.append(cycle_dist.item())
+                    cycle_dist = 0
+                    for out_gold, out_pred in zip(out_list_gold, out_list_predicted):
+                        # essentially feature matching, as is often done in vocoder training,
+                        # since we're essentially dealing with a discriminator here.
+                        cycle_dist = cycle_dist + torch.nn.functional.l1_loss(
+                            out_pred, out_gold.detach()
+                        )
 
-                if step_counter <= phase_1_steps:
-                    # ===============================================
-                    # =        PHASE 1: no cycle objective          =
-                    # ===============================================
-                    pass
-                else:
-                    # ================================================
-                    # = PHASE 2:     cycle objective is added        =
-                    # ================================================
-                    train_loss = train_loss + cycle_dist
+                    train_losses_this_epoch.append(train_loss.item())
+                    l1_losses_this_epoch.append(l1_loss.item())
+                    mle_losses_this_epoch.append(mle_loss.item())
+                    duration_losses_this_epoch.append(duration_loss.item())
+                    pitch_losses_this_epoch.append(pitch_loss.item())
+                    energy_losses_this_epoch.append(energy_loss.item())
+                    cycle_losses_this_epoch.append(cycle_dist.item())
 
-            style_embedding_function.zero_grad()
-            optimizer.zero_grad()
-            scaler.scale(train_loss).backward()
+                    if step_counter <= phase_1_steps:
+                        # ===============================================
+                        # =        PHASE 1: no cycle objective          =
+                        # ===============================================
+                        pass
+                    else:
+                        # ================================================
+                        # = PHASE 2:     cycle objective is added        =
+                        # ================================================
+                        if not cycle_dist.isnan():
+                            train_loss = train_loss + cycle_dist
 
-            scaler.unscale_(optimizer)
-            clip_grad_norm_(
-                net.parameters(), 1.0, error_if_nonfinite=False
-            )
-            scaler.step(optimizer)
-            scaler.update()
-            scheduler.step()
+                style_embedding_function.zero_grad()
+                optimizer.zero_grad()
+                scaler.scale(train_loss).backward()
 
+                scaler.unscale_(optimizer)
+                clip_grad_norm_(net.parameters(), 1.0, error_if_nonfinite=False)
+                scaler.step(optimizer)
+                scaler.update()
+                scheduler.step()
+
+            batch_counter += 1
+            
         net.eval()
         style_embedding_function.eval()
 
         train_loss_epoch = (
             sum(train_losses_this_epoch) / len(train_losses_this_epoch)
             if len(train_losses_this_epoch) > 0
+            else 0.0
+        )
+        l1_loss_epoch = (
+            sum(l1_losses_this_epoch) / len(l1_losses_this_epoch)
+            if len(l1_losses_this_epoch) > 0
             else 0.0
         )
         mle_loss_epoch = (
@@ -287,8 +321,9 @@ def train_loop(
 
         print(f"\nSteps: {step_counter}")
         print(
-            "Training Loss: {} - MLE Loss: {} - Duration Loss: {} - Pitch Loss: {} - Energy Loss: {} - Cycle Loss: {}".format(
+            "Training Loss: {:.5f} - Mel Loss: {:.5f} - MLE Loss: {:.5f} - Duration Loss: {:.5f} - Pitch Loss: {:.5f} - Energy Loss: {:.5f} - Cycle Loss: {:.5f}".format(
                 train_loss_epoch,
+                l1_loss_epoch,
                 mle_loss_epoch,
                 duration_loss_epoch,
                 pitch_loss_epoch,
@@ -305,6 +340,7 @@ def train_loop(
             wandb.log(
                 {
                     "Training_loss": train_loss_epoch,
+                    "L1_loss": l1_loss_epoch,
                     "MLE_loss": mle_loss_epoch,
                     "Duration_loss": duration_loss_epoch,
                     "Pitch_loss": pitch_loss_epoch,
