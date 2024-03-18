@@ -267,7 +267,8 @@ class FastGlow2(torch.nn.Module, ABC):
                 encoded_texts_std, predicted_durations, alpha
             )   # [B, Lmax, odim]
             
-            z = encoded_frames_mean + torch.exp(encoded_frames_std) * torch.randn_like(encoded_frames_mean) # [B, Lmax, odim]
+            _z = encoded_frames_mean + torch.exp(encoded_frames_std) * torch.randn_like(encoded_frames_mean) # [B, Lmax, odim]
+            z = _z
 
             speech_masks = self._source_mask(speech_lens)  # [B, 1, Lmax]
 
@@ -305,10 +306,10 @@ class FastGlow2(torch.nn.Module, ABC):
             )   # [B, Lmax, odim]
             
             # forward path
-            z = encoded_frames_mean + torch.exp(encoded_frames_std) * torch.randn_like(encoded_frames_mean) # [B, Lmax, odim]
+            _z = encoded_frames_mean + torch.exp(encoded_frames_std) * torch.randn_like(encoded_frames_mean) # [B, Lmax, odim]
 
         ys, _ = self.decoder(
-            z.transpose(1, 2),
+            _z.transpose(1, 2),
             speech_masks,
             utterance_embedding.unsqueeze(-1),
             reverse=True,
