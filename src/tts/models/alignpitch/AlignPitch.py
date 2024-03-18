@@ -110,6 +110,7 @@ class AlignPitch(torch.nn.Module, ABC):
         self.adim = adim
         self.eos = 1
         self.max_duration = max_duration
+        self.binary_loss_weight = 0.0
         self.use_scaled_pos_enc = use_scaled_pos_enc
         self.multilingual_model = lang_embs is not None
         self.multispeaker_model = utt_embed_dim is not None
@@ -188,7 +189,7 @@ class AlignPitch(torch.nn.Module, ABC):
         )
 
         # define aligner
-        self.aligner = AlignmentNetwork(in_query_channels=odim, in_key_channels=idim)
+        self.aligner = AlignmentNetwork(in_query_channels=odim, in_key_channels=adim)
 
         # define length regulator
         self.length_regulator = LengthRegulator()
@@ -284,7 +285,7 @@ class AlignPitch(torch.nn.Module, ABC):
             alignment_logprob=outputs["alignment_logprob"],
             alignment_hard=outputs["alignment_mas"],
             alignment_soft=outputs["alignment_soft"],
-            binary_loss_weight=None,
+            binary_loss_weight=self.binary_loss_weight,
         )
 
         if return_mels:
@@ -328,7 +329,7 @@ class AlignPitch(torch.nn.Module, ABC):
         # aligner
         o_alignment_dur, alignment_soft, alignment_logprob, alignment_mas = (
             self._forward_aligner(
-                text_tensors,
+                en_outs,
                 gold_speech,
                 text_masks,
                 spec_masks,
@@ -513,14 +514,10 @@ class AlignPitch(torch.nn.Module, ABC):
         )  # [B, adim, T_en]
         return o_energy_emb, o_energy
 
+    @torch.no_grad()
     def inference(
         self,
         text,
-        speech=None,
-        durations=None,
-        pitch=None,
-        energy=None,
-        alpha=1.0,
         utterance_embedding=None,
         return_duration_pitch_energy=False,
         lang_id=None,
@@ -544,39 +541,60 @@ class AlignPitch(torch.nn.Module, ABC):
 
         """
         self.eval()
-        x, y = text, speech
-        d, p, e = durations, pitch, energy
+        x = text
 
         # setup batch axis
         ilens = torch.tensor([x.shape[0]], dtype=torch.long, device=x.device)
-        xs, ys = x.unsqueeze(0), None
-        if y is not None:
-            ys = y.unsqueeze(0)
+        xs = x.unsqueeze(0)
         if lang_id is not None:
             lang_id = lang_id.unsqueeze(0)
+        utterance_embedding = utterance_embedding.unsqueeze(0)
 
-        (
-            before_outs,
-            after_outs,
-            d_outs,
-            pitch_predictions,
-            energy_predictions,
-        ) = self._forward(
-            xs,
-            ilens,
-            ys,
-            is_inference=True,
-            alpha=alpha,
-            utterance_embedding=utterance_embedding.unsqueeze(0),
-            lang_ids=lang_id,
-        )  # (1, L, odim)
+        if not self.multilingual_model:
+            lang_id = None
+
+        if not self.multispeaker_model:
+            utterance_embedding = None
+
+        # forward encoder
+        x_masks = self._source_mask(ilens)  # [B, 1, Tmax]
+        en_outs, _ = self.encoder(
+            xs, x_masks, utterance_embedding=utterance_embedding, lang_ids=lang_id
+        )
+
+        # duration predictor
+        d_masks = make_pad_mask(ilens, device=ilens.device)  # [B, Tmax]
+        o_dr = self.duration_predictor.inference(en_outs, d_masks)  # [B, Tmax]
+
+        # pitch energy predictor
+        o_pitch_emb, o_pitch = self._forward_pitch_predictor(
+            en_outs, d_masks.unsqueeze(-1)
+        )
+        o_energy_emb, o_energy = self._forward_energy_predictor(
+            en_outs, d_masks.unsqueeze(-1)
+        )
+
+        en_outs = en_outs + o_pitch_emb + o_energy_emb
+        en_outs = self.length_regulator(en_outs, o_dr)  # (B, Lmax, adim)
+
+        # forward decoder
+        zs, _ = self.decoder(en_outs, None, utterance_embedding)  # (B, Lmax, adim)
+        de_outs = self.feat_out(zs).view(zs.size(0), -1, self.odim)  # (B, Lmax, odim)
+
         for phoneme_index, phoneme_vector in enumerate(xs.squeeze()):
             if phoneme_vector[get_feature_to_index_lookup()["voiced"]] == 0:
-                pitch_predictions[0][phoneme_index] = 0.0
+                o_pitch[0][phoneme_index] = 0.0
         self.train()
         if return_duration_pitch_energy:
-            return after_outs[0], d_outs[0], pitch_predictions[0], energy_predictions[0]
-        return after_outs[0]
+            return {
+                "model_outputs": de_outs[0],
+                "durations": o_dr[0],
+                "pitch_avg": o_pitch[0],
+                "energy_avg": o_energy[0],
+            }
+        return {
+            "model_outputs": de_outs[0],
+        }
 
     def _source_mask(self, ilens):
         """

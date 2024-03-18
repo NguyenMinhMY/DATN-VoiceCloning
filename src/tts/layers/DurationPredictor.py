@@ -95,7 +95,7 @@ class DurationPredictor(torch.nn.Module):
         if is_inference:
             # NOTE: since we learned to predict in the log domain, we have to invert the log during inference.
             xs = torch.clamp(
-                torch.round(xs.exp() - self.offset), min=0
+                torch.round(xs.exp() - self.offset), min=0, max=75
             ).long()  # avoid negative value
         else:
             xs = xs.masked_fill(x_masks, 0.0)
