@@ -1,6 +1,7 @@
 import os
 import statistics
 from glob import glob
+from collections import defaultdict
 
 import torch
 from torch.utils.data import Dataset
@@ -274,14 +275,21 @@ class FastSpeechDataset(Dataset):
                 os.path.join(cache_dir, "fast_train_cache.pt"), map_location="cpu"
             )
 
+        self.datapoints_of_ids = defaultdict(list)
+        for datapoint in self.datapoints:
+            spk_id = self.get_speaker_id(datapoint[8])
+            self.datapoints_of_ids[spk_id].append(datapoint)
         self.cache_dir = cache_dir
         self.language_id = get_language_id(lang)
         print(
             f"Prepared a FastSpeech dataset with {len(self.datapoints)} datapoints in {cache_dir}."
         )
 
+    def get_speaker_id(self, path_to_file):
+        return os.path.basename(path_to_file).split('-')[0]
+    
     def __getitem__(self, index):
-        speaker_id = os.path.basename(self.datapoints[index][8]).split('-')[0]
+        speaker_id = self.get_speaker_id(self.datapoints[index][8])
         return (
             self.datapoints[index][0],
             self.datapoints[index][1],
