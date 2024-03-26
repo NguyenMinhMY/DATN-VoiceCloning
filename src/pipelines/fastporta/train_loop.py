@@ -36,6 +36,14 @@ def collate_and_pad(batch):
         [datapoint[9] for datapoint in batch],
     )
 
+def get_random_utterance_conditions(dataset: FastSpeechDataset, spk_ids: list):
+    mels = list()
+    lengths = list()
+    for id in spk_ids:
+        datapoint = random.choice(dataset.datapoints_of_ids[id])
+        mels.append(datapoint[2])
+        lengths.append(datapoint[3])
+    return pad_sequence(mels, batch_first=True), torch.stack(lengths).squeeze(1)
 
 def train_loop(
     net: FastPorta,
@@ -132,10 +140,11 @@ def train_loop(
         
         for batch in tqdm(train_loader):
             with autocast(enabled=enable_autocast, cache_enabled=False):
+                batch_of_ref_utterances, batch_of_ref_utterance_lengths = get_random_utterance_conditions(batch[9])
                 style_embedding_function.eval()
                 style_embedding_of_gold, out_list_gold = style_embedding_function(
-                    batch_of_spectrograms=batch[2].to(device),
-                    batch_of_spectrogram_lengths=batch[3].to(device),
+                    batch_of_spectrograms=batch_of_ref_utterance_lengths.to(device),
+                    batch_of_spectrogram_lengths=batch_of_ref_utterance_lengths.to(device),
                     return_all_outs=True,
                 )
                 (
@@ -159,26 +168,14 @@ def train_loop(
                     return_mels=True,
                 )
 
-                def get_utterance_conditions(spk_ids):
-                    mels = list()
-                    lengths = list()
-                    for id in spk_ids:
-                        datapoint = random.choice(train_dataset.datapoints_of_ids[id])
-                        mels.append(datapoint[2])
-                        lengths.append(datapoint[3])
-                    
-                    return pad_sequence(mels, batch_first=True), torch.stack(lengths).squeeze(1)
-                
-                batch_of_ref_utterances, batch_of_ref_utterance_lengths = get_utterance_conditions(batch[9])
-
 
                 style_embedding_function.gst.ref_enc.gst.train()
                 (
                     style_embedding_of_predicted,
                     out_list_predicted,
                 ) = style_embedding_function(
-                    batch_of_spectrograms=batch_of_ref_utterances.to(device),
-                    batch_of_spectrogram_lengths=batch_of_ref_utterance_lengths.to(device),
+                    batch_of_spectrograms=batch[2].to(device),
+                    batch_of_spectrogram_lengths=batch[3].to(device),
                     return_all_outs=True,
                 )
 
