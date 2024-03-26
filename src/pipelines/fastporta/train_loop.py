@@ -140,10 +140,10 @@ def train_loop(
         
         for batch in tqdm(train_loader):
             with autocast(enabled=enable_autocast, cache_enabled=False):
-                batch_of_ref_utterances, batch_of_ref_utterance_lengths = get_random_utterance_conditions(batch[9])
+                batch_of_ref_utterances, batch_of_ref_utterance_lengths = get_random_utterance_conditions(train_dataset, batch[9])
                 style_embedding_function.eval()
                 style_embedding_of_gold, out_list_gold = style_embedding_function(
-                    batch_of_spectrograms=batch_of_ref_utterance_lengths.to(device),
+                    batch_of_spectrograms=batch_of_ref_utterances.to(device),
                     batch_of_spectrogram_lengths=batch_of_ref_utterance_lengths.to(device),
                     return_all_outs=True,
                 )
@@ -174,7 +174,7 @@ def train_loop(
                     style_embedding_of_predicted,
                     out_list_predicted,
                 ) = style_embedding_function(
-                    batch_of_spectrograms=batch[2].to(device),
+                    batch_of_spectrograms=output_spectrograms.to(device),
                     batch_of_spectrogram_lengths=batch[3].to(device),
                     return_all_outs=True,
                 )

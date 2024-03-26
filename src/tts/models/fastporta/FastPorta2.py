@@ -423,7 +423,7 @@ class FastPorta2(torch.nn.Module, ABC):
                 mel_out=mel_outs,
                 encoded_texts=encoded_texts,
                 tgt_nonpadding=None,
-            ).squeeze()
+            )
         else:
             glow_loss = self.post_flow(
                 tgt_mels=gold_speech,
