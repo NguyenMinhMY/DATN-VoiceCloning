@@ -36,10 +36,7 @@ class FastPorta2(torch.nn.Module, ABC):
         eunits=1536,
         dlayers=6,
         dunits=1536,
-        postnet_layers=5,
-        postnet_chans=256,
-        postnet_filts=5,
-        positionwise_layer_type="conv1d",
+        mix_style_p=0.5,
         positionwise_conv_kernel_size=1,
         use_scaled_pos_enc=True,
         use_batch_norm=True,
@@ -109,7 +106,7 @@ class FastPorta2(torch.nn.Module, ABC):
         # mix style
         self.proj_norm = torch.torch.nn.Linear(utt_embed_dim, adim)
         self.mix_style_norm = MixStyle(
-            p=0.5, alpha=0.1, eps=1e-6, hidden_size=self.adim
+            p=mix_style_p, alpha=0.1, eps=1e-6, hidden_size=self.adim
         )
 
         # define encoder
@@ -345,7 +342,9 @@ class FastPorta2(torch.nn.Module, ABC):
         )  # (B, Tmax, adim)
 
         encoded_texts = self.mix_style_norm(
-            encoded_texts, self.proj_norm(utterance_embedding.unsqueeze(1))
+            encoded_texts,
+            self.proj_norm(utterance_embedding.unsqueeze(1)),
+            is_inference,
         )
 
         # forward duration predictor and variance predictors
@@ -441,6 +440,7 @@ class FastPorta2(torch.nn.Module, ABC):
             glow_loss,
         )
 
+    @torch.no_grad()
     def inference(
         self,
         text,

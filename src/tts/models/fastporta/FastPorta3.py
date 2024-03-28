@@ -428,7 +428,7 @@ class FastPorta3(torch.nn.Module, ABC):
                 mel_out=mel_outs,
                 encoded_texts=g_embed,
                 tgt_nonpadding=None,
-            ).squeeze()
+            )
         else:
             glow_loss = self.post_flow(
                 tgt_mels=gold_speech,
@@ -446,6 +446,7 @@ class FastPorta3(torch.nn.Module, ABC):
             glow_loss,
         )
 
+    @torch.no_grad()
     def inference(
         self,
         text,

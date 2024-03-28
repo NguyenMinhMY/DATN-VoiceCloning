@@ -42,8 +42,8 @@ class MixStyle(nn.Module):
             2 * hidden_size,  # For both b (bias) g (gain)
         )
 
-    def forward(self, x, spk_embed):
-        if random.random() > self.p:
+    def forward(self, x, spk_embed, is_inference=False):
+        if not is_inference and random.random() > self.p:
             return x
 
         B = x.size(0)
@@ -65,8 +65,12 @@ class MixStyle(nn.Module):
         perm = torch.randperm(B)
         mu2, sig2 = mu1[perm], sig1[perm]
 
-        mu_mix = mu1 * lmda + mu2 * (1 - lmda)
-        sig_mix = sig1 * lmda + sig2 * (1 - lmda)
+        if not is_inference:
+            mu_mix = mu1 * lmda + mu2 * (1 - lmda)
+            sig_mix = sig1 * lmda + sig2 * (1 - lmda)
+        else:
+            mu_mix = mu1
+            sig_mix = sig1
 
         # Perform Scailing and Shifting
         return sig_mix * x_normed + mu_mix  # [B, T, H_m]
