@@ -36,6 +36,7 @@ def collate_and_pad(batch):
         [datapoint[9] for datapoint in batch],
     )
 
+
 def get_random_utterance_conditions(dataset: FastSpeechDataset, spk_ids: list):
     mels = list()
     lengths = list()
@@ -44,6 +45,7 @@ def get_random_utterance_conditions(dataset: FastSpeechDataset, spk_ids: list):
         mels.append(datapoint[2])
         lengths.append(datapoint[3])
     return pad_sequence(mels, batch_first=True), torch.stack(lengths).squeeze(1)
+
 
 def train_loop(
     net: FastPorta,
@@ -62,7 +64,8 @@ def train_loop(
     phase_1_steps=100000,
     phase_2_steps=100000,
     use_wandb=False,
-    enable_autocast=True
+    enable_autocast=True,
+    is_parallel=False,
 ):
     """
     Args:
@@ -129,22 +132,37 @@ def train_loop(
     for step_counter in range(step_counter + 1, steps + 1):
         start_time = time.time()
 
+        epoch_losses = {
+            key: list()
+            for key in [
+                "Train Loss",
+                "Mel Loss",
+                "Glow Loss",
+                "Duration Loss",
+                "Pitch Loss",
+                "Energy Loss",
+                "Cycle Loss",
+            ]
+        }
 
-        epoch_losses = {key: list() for key in ["Train Loss",
-                                                "Mel Loss",
-                                                "Glow Loss",
-                                                "Duration Loss",
-                                                "Pitch Loss",
-                                                "Energy Loss",
-                                                "Cycle Loss"]}
-        
         for batch in tqdm(train_loader):
             with autocast(enabled=enable_autocast, cache_enabled=False):
-                batch_of_ref_utterances, batch_of_ref_utterance_lengths = get_random_utterance_conditions(train_dataset, batch[9])
+                if is_parallel:
+                    batch_of_ref_utterances, batch_of_ref_utterance_lengths = (
+                        batch[2],
+                        batch[3],
+                    )
+                else:
+                    batch_of_ref_utterances, batch_of_ref_utterance_lengths = (
+                        get_random_utterance_conditions(train_dataset, batch[9])
+                    )
+
                 style_embedding_function.eval()
                 style_embedding_of_gold, out_list_gold = style_embedding_function(
                     batch_of_spectrograms=batch_of_ref_utterances.to(device),
-                    batch_of_spectrogram_lengths=batch_of_ref_utterance_lengths.to(device),
+                    batch_of_spectrogram_lengths=batch_of_ref_utterance_lengths.to(
+                        device
+                    ),
                     return_all_outs=True,
                 )
                 (
@@ -167,7 +185,6 @@ def train_loop(
                     lang_ids=batch[8].to(device),
                     return_mels=True,
                 )
-
 
                 style_embedding_function.gst.ref_enc.gst.train()
                 (
@@ -211,9 +228,7 @@ def train_loop(
             scaler.scale(train_loss).backward()
 
             scaler.unscale_(optimizer)
-            clip_grad_norm_(
-                net.parameters(), 1.0, error_if_nonfinite=False
-            )
+            clip_grad_norm_(net.parameters(), 1.0, error_if_nonfinite=False)
             scaler.step(optimizer)
             scaler.update()
             scheduler.step()
@@ -253,7 +268,10 @@ def train_loop(
                 )
 
             # Save the best model based on the cycle loss
-            if epoch_loss["Cycle Loss"] < best_cycle_loss and epoch_loss["Cycle Loss"] != 0.0:
+            if (
+                epoch_loss["Cycle Loss"] < best_cycle_loss
+                and epoch_loss["Cycle Loss"] != 0.0
+            ):
                 best_cycle_loss = epoch_loss["Cycle Loss"]
                 torch.save(
                     {
@@ -283,11 +301,7 @@ def train_loop(
             # delete_old_checkpoints(save_directory, keep=5)
 
         print(f"\nSteps: {step_counter}")
-        print(
-            " - ".join(
-                [f"{key}: {value:.3f}" for key, value in epoch_loss.items()]
-            )
-        )
+        print(" - ".join([f"{key}: {value:.3f}" for key, value in epoch_loss.items()]))
 
         print(
             "Time elapsed:  {} Minutes".format(round((time.time() - start_time) / 60))

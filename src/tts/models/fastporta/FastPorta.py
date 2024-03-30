@@ -430,6 +430,7 @@ class FastPorta(torch.nn.Module, ABC):
             glow_loss,
         )
 
+    @torch.no_grad()
     def inference(
         self,
         text,
