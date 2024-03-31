@@ -14,7 +14,7 @@ from src.tts.layers.VariancePredictor import VariancePredictor
 from src.tts.layers.Glow import Glow
 
 from src.tts.layers.common.LengthRegulator import LengthRegulator
-from src.tts.layers.common.MixStyleLayerNorm import MixStyle
+from src.tts.layers.common.MixStyleLayerNorm import MixStyle2
 
 from src.utility.articulatory_features import get_feature_to_index_lookup
 from src.utility.utils import initialize
@@ -36,7 +36,7 @@ class FastPorta2(torch.nn.Module, ABC):
         eunits=1536,
         dlayers=6,
         dunits=1536,
-        mix_style_p=0.5,
+        mix_style_p=1.0,
         positionwise_conv_kernel_size=1,
         use_scaled_pos_enc=True,
         use_batch_norm=True,
@@ -104,9 +104,12 @@ class FastPorta2(torch.nn.Module, ABC):
         self.dist = dist.Normal(0, 1)
 
         # mix style
-        self.proj_norm = torch.torch.nn.Linear(utt_embed_dim, adim)
-        self.mix_style_norm = MixStyle(
-            p=mix_style_p, alpha=0.1, eps=1e-6, hidden_size=self.adim
+        self.mix_style_norm = MixStyle2(
+            p=mix_style_p,
+            alpha=0.1,
+            eps=1e-6,
+            hidden_size=self.adim,
+            spk_embed_dim=utt_embed_dim,
         )
 
         # define encoder
@@ -337,13 +340,13 @@ class FastPorta2(torch.nn.Module, ABC):
         encoded_texts, _ = self.encoder(
             text_tensors,
             text_masks,
-            utterance_embedding=None,
+            utterance_embedding=utterance_embedding,
             lang_ids=lang_ids,
         )  # (B, Tmax, adim)
 
         encoded_texts = self.mix_style_norm(
             encoded_texts,
-            self.proj_norm(utterance_embedding.unsqueeze(1)),
+            utterance_embedding.unsqueeze(1),
             is_inference,
         )
 
