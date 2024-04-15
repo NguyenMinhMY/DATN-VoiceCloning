@@ -14,7 +14,7 @@ from src.tts.layers.VariancePredictor import VariancePredictor
 from src.tts.layers.Glow import Glow
 
 from src.tts.layers.common.LengthRegulator import LengthRegulator
-from src.tts.layers.common.MixStyleLayerNorm import MixStyle
+from src.tts.layers.common.MixStyleLayerNorm import MixStyle2
 
 from src.utility.articulatory_features import get_feature_to_index_lookup
 from src.utility.utils import initialize
@@ -36,10 +36,7 @@ class FastPorta3(torch.nn.Module, ABC):
         eunits=1536,
         dlayers=6,
         dunits=1536,
-        postnet_layers=5,
-        postnet_chans=256,
-        postnet_filts=5,
-        positionwise_layer_type="conv1d",
+        mix_style_p=0.5,
         positionwise_conv_kernel_size=1,
         use_scaled_pos_enc=True,
         use_batch_norm=True,
@@ -107,9 +104,12 @@ class FastPorta3(torch.nn.Module, ABC):
         self.dist = dist.Normal(0, 1)
 
         # mix style
-        self.proj_norm = torch.torch.nn.Linear(utt_embed_dim, adim)
-        self.mix_style_norm = MixStyle(
-            p=0.5, alpha=0.1, eps=1e-6, hidden_size=self.adim
+        self.mix_style_norm = MixStyle2(
+            p=mix_style_p,
+            alpha=0.1,
+            eps=1e-6,
+            hidden_size=self.adim,
+            spk_embed_dim=utt_embed_dim,
         )
 
         # define encoder
@@ -133,7 +133,7 @@ class FastPorta3(torch.nn.Module, ABC):
             use_cnn_module=use_cnn_in_conformer,
             cnn_module_kernel=conformer_enc_kernel_size,
             zero_triu=False,
-            utt_embed=None,
+            utt_embed=utt_embed_dim,
             lang_embs=lang_embs,
         )
 
@@ -208,8 +208,6 @@ class FastPorta3(torch.nn.Module, ABC):
 
         # define final projection
         self.feat_out = torch.nn.Linear(adim, odim * reduction_factor)
-
-        self.proj_flow = torch.torch.nn.Linear(utt_embed_dim, adim)
 
         # define post flow
         self.post_flow = Glow(
@@ -342,13 +340,16 @@ class FastPorta3(torch.nn.Module, ABC):
         encoded_texts, _ = self.encoder(
             text_tensors,
             text_masks,
-            utterance_embedding=None,
+            utterance_embedding=utterance_embedding,
             lang_ids=lang_ids,
         )  # (B, Tmax, adim)
 
-        encoded_texts = self.mix_style_norm(
-            encoded_texts, self.proj_norm(utterance_embedding.unsqueeze(1))
-        )
+        if not is_inference:
+            encoded_texts = self.mix_style_norm(
+                encoded_texts,
+                utterance_embedding.unsqueeze(1),
+                is_inference,
+            )
 
         # forward duration predictor and variance predictors
         d_masks = make_pad_mask(text_lens, device=text_lens.device)
@@ -417,24 +418,21 @@ class FastPorta3(torch.nn.Module, ABC):
         )  # (B, Lmax, adim)
         mel_outs = self.feat_out(zs).view(zs.size(0), -1, self.odim)  # (B, Lmax, odim)
 
-        g_embed = self.proj_flow(utterance_embedding.unsqueeze(1))
-        g_embed = g_embed.repeat(1, mel_outs.size(1), 1)
-
         glow_loss = None
         if is_inference:
             mel_outs = self.post_flow(
                 tgt_mels=None,
                 infer=is_inference,
                 mel_out=mel_outs,
-                encoded_texts=g_embed,
+                encoded_texts=encoded_texts,
                 tgt_nonpadding=None,
             )
         else:
             glow_loss = self.post_flow(
                 tgt_mels=gold_speech,
                 infer=is_inference,
-                mel_out=mel_outs,
-                encoded_texts=g_embed,
+                mel_out=mel_outs.detach().clone(),
+                encoded_texts=encoded_texts.detach().clone(),
                 tgt_nonpadding=h_masks,
             )
 
