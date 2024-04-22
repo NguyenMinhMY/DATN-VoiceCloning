@@ -447,7 +447,7 @@ class FastPorta4(torch.nn.Module, ABC):
         if lang_id is not None:
             lang_id = lang_id.unsqueeze(0)
 
-        (mel_outs, d_outs, pitch_predictions, energy_predictions, _) = self._forward(
+        (mel_outs, d_outs, pitch_predictions, energy_predictions) = self._forward(
             xs,
             ilens,
             ys,
