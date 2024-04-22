@@ -11,10 +11,9 @@ from src.tts.layers.Conformer import Conformer
 from src.tts.layers.DurationPredictor import DurationPredictor
 from src.tts.layers.PostNet import PostNet
 from src.tts.layers.VariancePredictor import VariancePredictor
-from src.tts.layers.Glow import Glow
-from src.tts.layers.VAE import VAE
 
 from src.tts.layers.common.LengthRegulator import LengthRegulator
+from src.tts.layers.common.MixStyleLayerNorm import MixStyle2
 
 from src.utility.articulatory_features import get_feature_to_index_lookup
 from src.utility.utils import initialize
@@ -24,7 +23,7 @@ from src.utility.utils import make_pad_mask
 from src.tts.losses.FastSpeech2Loss import FastSpeech2Loss
 
 
-class FastPortaVAE(torch.nn.Module, ABC):
+class FastPorta4(torch.nn.Module, ABC):
     def __init__(
         self,
         # network structure related
@@ -36,10 +35,7 @@ class FastPortaVAE(torch.nn.Module, ABC):
         eunits=1536,
         dlayers=6,
         dunits=1536,
-        postnet_layers=5,
-        postnet_chans=256,
-        postnet_filts=5,
-        positionwise_layer_type="conv1d",
+        mix_style_p=0.5,
         positionwise_conv_kernel_size=1,
         use_scaled_pos_enc=True,
         use_batch_norm=True,
@@ -90,8 +86,6 @@ class FastPortaVAE(torch.nn.Module, ABC):
         # additional features
         utt_embed_dim=64,
         lang_embs=8000,
-        # Latent Vae
-        c_latent = 64,
     ):
         super().__init__()
 
@@ -107,7 +101,15 @@ class FastPortaVAE(torch.nn.Module, ABC):
         self.multilingual_model = lang_embs is not None
         self.multispeaker_model = utt_embed_dim is not None
         self.dist = dist.Normal(0, 1)
-        self.c_latent = c_latent
+
+        # mix style
+        self.mix_style_norm = MixStyle2(
+            p=mix_style_p,
+            alpha=0.1,
+            eps=1e-6,
+            hidden_size=self.adim,
+            spk_embed_dim=utt_embed_dim,
+        )
 
         # define encoder
         embed = torch.nn.Sequential(
@@ -133,9 +135,6 @@ class FastPortaVAE(torch.nn.Module, ABC):
             utt_embed=utt_embed_dim,
             lang_embs=lang_embs,
         )
-
-        # define vae
-        self.vae = VAE(i_dim=adim, hidden_dim=256, c_latent=c_latent)
 
         # define duration predictor
         self.duration_predictor = DurationPredictor(
@@ -209,25 +208,6 @@ class FastPortaVAE(torch.nn.Module, ABC):
         # define final projection
         self.feat_out = torch.nn.Linear(adim, odim * reduction_factor)
 
-        # define post flow
-        self.post_flow = Glow(
-            in_channels=odim,
-            hidden_channels=192,  # post_glow_hidden
-            kernel_size=5,  # post_glow_kernel_size
-            dilation_rate=1,
-            n_blocks=12,  # post_glow_n_blocks (original 12 in paper)
-            n_layers=4,  # post_glow_n_block_layers (original 3 in paper)
-            n_split=4,
-            n_sqz=2,
-            text_condition_channels=adim,
-            share_cond_layers=False,  # post_share_cond_layers
-            share_wn_layers=4,
-            sigmoid_scale=False,
-            condition_integration_projection=torch.nn.Conv1d(
-                odim + adim, adim, 5, padding=2
-            ),
-        )
-
         # define criterion
         self.criterion = FastSpeech2Loss(
             use_masking=use_masking, use_weighted_masking=use_weighted_masking
@@ -279,7 +259,7 @@ class FastPortaVAE(torch.nn.Module, ABC):
             is_inference=False,
             lang_ids=lang_ids,
         )
-        mel_outs, d_outs, p_outs, e_outs, glow_loss, kl_loss, vae_reconstruction_loss = fs_outs
+        mel_outs, d_outs, p_outs, e_outs = fs_outs
         # modify mod part of groundtruth (speaking pace)
         if self.reduction_factor > 1:
             speech_lengths = speech_lengths.new(
@@ -300,21 +280,18 @@ class FastPortaVAE(torch.nn.Module, ABC):
             ilens=text_lengths,
             olens=speech_lengths,
         )
-        loss = mel_loss + duration_loss + pitch_loss + energy_loss + glow_loss + kl_loss + vae_reconstruction_loss
+        loss = mel_loss + duration_loss + pitch_loss + energy_loss
 
         if return_mels:
             return (
                 mel_outs,
                 loss,
                 mel_loss,
-                glow_loss,
                 duration_loss,
                 pitch_loss,
                 energy_loss,
-                kl_loss,
-                vae_reconstruction_loss,
             )
-        return loss, mel_loss, glow_loss, duration_loss, pitch_loss, energy_loss, kl_loss, vae_reconstruction_loss
+        return loss, mel_loss, duration_loss, pitch_loss, energy_loss
 
     def _forward(
         self,
@@ -346,8 +323,12 @@ class FastPortaVAE(torch.nn.Module, ABC):
             lang_ids=lang_ids,
         )  # (B, Tmax, adim)
 
-        # forward vae
-        kl_loss, vae_reconstruction_loss, reconstructed_features = self.vae(encoded_texts)
+        if not is_inference:
+            encoded_texts = self.mix_style_norm(
+                encoded_texts,
+                utterance_embedding.unsqueeze(1),
+                is_inference,
+            )
 
         # forward duration predictor and variance predictors
         d_masks = make_pad_mask(text_lens, device=text_lens.device)
@@ -381,7 +362,7 @@ class FastPortaVAE(torch.nn.Module, ABC):
             embedded_energy_curve = self.energy_embed(
                 energy_predictions.transpose(1, 2)
             ).transpose(1, 2)
-            encoded_texts = reconstructed_features + embedded_energy_curve + embedded_pitch_curve
+            encoded_texts = encoded_texts + embedded_energy_curve + embedded_pitch_curve
             encoded_texts = self.length_regulator(
                 encoded_texts, predicted_durations, alpha
             )  # (B, Lmax, adim)
@@ -395,7 +376,7 @@ class FastPortaVAE(torch.nn.Module, ABC):
             embedded_energy_curve = self.energy_embed(
                 gold_energy.transpose(1, 2)
             ).transpose(1, 2)
-            encoded_texts = reconstructed_features + embedded_energy_curve + embedded_pitch_curve
+            encoded_texts = encoded_texts + embedded_energy_curve + embedded_pitch_curve
             encoded_texts = self.length_regulator(
                 encoded_texts, gold_durations
             )  # (B, Lmax, adim)
@@ -416,34 +397,14 @@ class FastPortaVAE(torch.nn.Module, ABC):
         )  # (B, Lmax, adim)
         mel_outs = self.feat_out(zs).view(zs.size(0), -1, self.odim)  # (B, Lmax, odim)
 
-        glow_loss = None
-        if is_inference:
-            mel_outs = self.post_flow(
-                tgt_mels=None,
-                infer=is_inference,
-                mel_out=mel_outs,
-                encoded_texts=encoded_texts,
-                tgt_nonpadding=None,
-            )
-        else:
-            glow_loss = self.post_flow(
-                tgt_mels=gold_speech,
-                infer=is_inference,
-                mel_out=mel_outs.detach().clone(),
-                encoded_texts=encoded_texts.detach().clone(),
-                tgt_nonpadding=h_masks,
-            )
-
         return (
             mel_outs,
             predicted_durations,
             pitch_predictions,
             energy_predictions,
-            glow_loss,
-            kl_loss,
-            vae_reconstruction_loss,
         )
 
+    @torch.no_grad()
     def inference(
         self,
         text,
@@ -486,7 +447,7 @@ class FastPortaVAE(torch.nn.Module, ABC):
         if lang_id is not None:
             lang_id = lang_id.unsqueeze(0)
 
-        (mel_outs, d_outs, pitch_predictions, energy_predictions, _, _, _) = self._forward(
+        (mel_outs, d_outs, pitch_predictions, energy_predictions, _) = self._forward(
             xs,
             ilens,
             ys,
