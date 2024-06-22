@@ -21,18 +21,19 @@ TODO: machine, script run requirement.txt, down model weights (aligner, toucanTT
 
 ### Build cache
 
-1. Download and move model weights (.pt) to iaslab_customer_service/cssa/static/weights/
-2. Intall vncorenlp
-    ```
-    mkdir -p iaslab_customer_service/cssa/static/vncorenlp/models/wordsegmenter  
-    wget https://raw.githubusercontent.com/vncorenlp/VnCoreNLP/master/VnCoreNLP-1.1.1.jar  
-    wget https://raw.githubusercontent.com/vncorenlp/VnCoreNLP/master/models/wordsegmenter/vi-vocab  
-    wget https://raw.githubusercontent.com/vncorenlp/VnCoreNLP/master/models/wordsegmenter/wordsegmenter.rdr  
-    mv VnCoreNLP-1.1.1.jar iaslab_customer_service/cssa/static/vncorenlp/   
-    mv vi-vocab iaslab_customer_service/cssa/static/vncorenlp/models/wordsegmenter/  
-    mv wordsegmenter.rdr iaslab_customer_service/cssa/static/vncorenlp/models/wordsegmenter/  
-    ```
-3. Download file from: https://public.vinai.io/PhoBERT_base_transformers.tar.gz or https://huggingface.co/vinai/phobert-base and extract in iaslab_customer_service/cssa/static/vinai/phobert-base/
+After training the model, we need to build a cache from the dataset for faster data loading during the training process.
+
+```bash
+python build_data_cache.py -d ./data/librispeech/train-clean
+```
+
+Some important arguments:
+
+- `--data_dir` : Path to the dataset directory (e.g., ./data/librispeech/test-clean).
+- `--aligner_checkpoint` : Path to the aligner checkpoint (default: ./weights/aligner.pt).
+- `--cache_dir` : Path to the cache directory (default: .cache/ with the cache filename fast_train_cache.pt).
+
+for more details, using `python build_data_cache.py -h`
 
 ### Train model
 
@@ -46,7 +47,7 @@ docker build -t iaslab/cssa-gpu -f docker/iaslab_customer_service/cssa/Dockerfil
 
 Execute the command below to start app (GPU option):
 
-```
+```bash
 docker run -d --gpus all -p 8000:5000 iaslab/cssa-gpu
 ```
 
@@ -54,7 +55,7 @@ docker run -d --gpus all -p 8000:5000 iaslab/cssa-gpu
 
 Execute the command below to start app (GPU option):
 
-```
+```bash
 docker run -d --gpus all -p 8000:5000 iaslab/cssa-gpu
 ```
 
