@@ -14,10 +14,9 @@ from tqdm import tqdm
 from src.spk_embedding.StyleEmbedding import StyleEmbedding
 from src.utility.warmup_scheduler import WarmupScheduler
 from src.utility.storage_config import MODELS_DIR
-from src.utility.utils import delete_old_checkpoints
 from src.utility.utils import get_most_recent_checkpoint
-from src.utility.utils import plot_progress_spec, clip_grad_norm_
-from src.tts.models.fastporta.FastPorta import FastPorta
+from src.utility.utils import clip_grad_norm_
+from src.tts.models.dgspeech.DGSpeech import DGSpeech
 from src.datasets.fastspeech_dataset import FastSpeechDataset
 
 
@@ -48,7 +47,7 @@ def get_random_utterance_conditions(dataset: FastSpeechDataset, spk_ids: list):
 
 
 def train_loop(
-    net: FastPorta,
+    net: DGSpeech,
     train_dataset: FastSpeechDataset,
     device,
     save_directory,
@@ -65,7 +64,7 @@ def train_loop(
     phase_2_steps=100000,
     use_wandb=False,
     enable_autocast=True,
-    is_parallel=False,
+    is_parallel=True,
 ):
     """
     Args:
@@ -86,6 +85,7 @@ def train_loop(
         path_to_embed_model: path to the pretrained embedding function
     """
 
+    print(save_directory)
     os.makedirs(save_directory, exist_ok=True)
 
     steps = phase_1_steps + phase_2_steps

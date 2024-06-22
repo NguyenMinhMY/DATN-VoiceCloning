@@ -24,7 +24,7 @@ from src.utility.utils import make_pad_mask
 from src.tts.losses.FastSpeech2Loss import FastSpeech2Loss
 
 
-class FastPorta3(torch.nn.Module, ABC):
+class DGSpeech(torch.nn.Module, ABC):
     def __init__(
         self,
         # network structure related

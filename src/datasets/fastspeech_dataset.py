@@ -44,11 +44,9 @@ def build_path_to_transcript_dict_libri_tts(
                     if speaker_name in ignored_speakers:
                         continue
                 path_to_transcript[audio_file] = text.lower()
-                
+
     for audio_file in path_to_transcript:
-        assert os.path.exists(
-            audio_file
-        ), f" [!] wav files don't exist - {audio_file}"
+        assert os.path.exists(audio_file), f" [!] wav files don't exist - {audio_file}"
 
     return path_to_transcript
 
@@ -119,7 +117,7 @@ class FastSpeechDataset(Dataset):
             dc = DurationCalculator(reduction_factor=reduction_factor)
             vis_dir = os.path.join(cache_dir, "duration_vis")
             os.makedirs(vis_dir, exist_ok=True)
-            
+
             _, sr = sf.read(filepaths[0])
             ap = AudioPreprocessor(
                 input_sr=sr,
@@ -133,7 +131,7 @@ class FastSpeechDataset(Dataset):
 
             for index in tqdm(range(len(dataset))):
                 # norm_wave = norm_waves[index]
-                path_to_audio =  filepaths[index]
+                path_to_audio = filepaths[index]
                 wave, _ = sf.read(path_to_audio)
 
                 norm_wave = ap.audio_to_wave_tensor(normalize=True, audio=wave)
@@ -164,9 +162,9 @@ class FastSpeechDataset(Dataset):
                 alignment_path, ctc_loss = acoustic_model.inference(
                     mel=melspec.to(device),
                     tokens=matrix_without_word_boundaries.to(device),
-                    save_img_for_debug=os.path.join(vis_dir, f"{index}.png")
-                    if save_imgs
-                    else None,
+                    save_img_for_debug=(
+                        os.path.join(vis_dir, f"{index}.png") if save_imgs else None
+                    ),
                     return_ctc=True,
                 )
 
@@ -235,7 +233,7 @@ class FastSpeechDataset(Dataset):
                         cached_duration.cpu(),
                         cached_energy,
                         cached_pitch,
-                        prosodic_condition, 
+                        prosodic_condition,
                         filepaths[index],
                     ]
                 )
@@ -286,8 +284,8 @@ class FastSpeechDataset(Dataset):
         )
 
     def get_speaker_id(self, path_to_file):
-        return os.path.basename(path_to_file).split('-')[0]
-    
+        return os.path.basename(path_to_file).split("-")[0]
+
     def __getitem__(self, index):
         speaker_id = self.get_speaker_id(self.datapoints[index][8])
         return (
@@ -301,7 +299,7 @@ class FastSpeechDataset(Dataset):
             self.datapoints[index][7],
             self.language_id,
             speaker_id,
-            self.datapoints[index][8]
+            self.datapoints[index][8],
         )
 
     def __len__(self):
@@ -317,11 +315,11 @@ class FastSpeechDataset(Dataset):
 class Miniset(Dataset):
     def __init__(self, total_dataset: FastSpeechDataset, speakerID: str) -> None:
         super().__init__()
-        self._speakerID = speakerID 
-        self.dataset = list(filter(lambda x: x[-1] == self._speakerID, total_dataset))     
-    
+        self._speakerID = speakerID
+        self.dataset = list(filter(lambda x: x[-1] == self._speakerID, total_dataset))
+
     def __getitem__(self, index):
         return self.dataset[index]
-    
+
     def __len__(self):
         return len(self.dataset)

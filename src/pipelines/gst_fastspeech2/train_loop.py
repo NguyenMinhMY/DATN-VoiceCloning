@@ -13,9 +13,8 @@ from tqdm import tqdm
 from src.spk_embedding.StyleEmbedding import StyleEmbedding
 from src.utility.warmup_scheduler import WarmupScheduler
 from src.utility.storage_config import MODELS_DIR
-from src.utility.utils import delete_old_checkpoints
 from src.utility.utils import get_most_recent_checkpoint
-from src.utility.utils import plot_progress_spec, clip_grad_norm_
+from src.utility.utils import clip_grad_norm_
 
 
 def collate_and_pad(batch):
@@ -50,7 +49,7 @@ def train_loop(
     phase_1_steps=100000,
     phase_2_steps=100000,
     use_wandb=False,
-    enable_autocast=True
+    enable_autocast=True,
 ):
     """
     Args:
@@ -191,9 +190,7 @@ def train_loop(
             scaler.scale(train_loss).backward()
 
             scaler.unscale_(optimizer)
-            clip_grad_norm_(
-                net.parameters(), 1.0, error_if_nonfinite=False
-            )
+            clip_grad_norm_(net.parameters(), 1.0, error_if_nonfinite=False)
             scaler.step(optimizer)
             scaler.update()
             scheduler.step()

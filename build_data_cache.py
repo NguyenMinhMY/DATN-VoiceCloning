@@ -9,7 +9,8 @@ from src.datasets.fastspeech_dataset import (
 
 
 def build_cache(config):
-    if config.enable_gpus:
+    # Enable GPU if available
+    if config.enable_gpu:
         if torch.cuda.is_available():
             device = torch.device("cuda")
         else:
