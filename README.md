@@ -101,6 +101,7 @@ for more details, using `python train.py -h`
 ### Evaluate model
 
 Execute the command below to synthesize audios and make evaluation
+Note: All audios must have `.wav` extension format
 
 ```bash
 python evaluation.py --model dgspeech --metric wer --path_to_eval_speakers ./evaluation/wer/audio_samples --path_to_eval_sentences ./evaluation/wer/eval_sentences.txt --pretrained_checkpoint ./weights/checkpoint_models_2024-06-22_13-44-18/checkpoint.pt --enable_gpu

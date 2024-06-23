@@ -107,6 +107,7 @@ def _synthesize(
     # Synthesize
     for spk_id in tqdm(os.listdir(path_to_eval_speakers)):
         os.makedirs(f"{path_to_out}/{spk_id}", exist_ok=True)
+        print(f"Speaker: {spk_id}, path to eval speakers: {path_to_eval_speakers}")
         ref_audio = glob(os.path.join(path_to_eval_speakers, spk_id) + "/*/*.wav")[0]
         for sent_id, sentence in enumerate(eval_sentences):
             waveform = _inference(
@@ -155,14 +156,14 @@ def evaluate(config):
     style_embed_function.requires_grad_(False)
 
     vocoder = HiFiGANGenerator().to(device)
-    avocodo_check_dict = torch.load(config.avocodo_checkpoint, map_location=device)
-    vocoder.load_state_dict(avocodo_check_dict["generator"])
+    vocoder_check_dict = torch.load(config.vocoder_checkpoint, map_location=device)
+    vocoder.load_state_dict(vocoder_check_dict["generator"])
     vocoder.eval()
 
     # Load model
-    model = MODEL_OPTIONS[config.model]["model"]().to(config.device)
+    model = MODEL_OPTIONS[config.model]["model"]().to(device)
     model_check_dict = torch.load(
-        config.pretrained_checkpoint, map_location=config.device
+        config.pretrained_checkpoint, map_location=device
     )
     model.load_state_dict(model_check_dict["model"])
     model.eval()
@@ -235,7 +236,8 @@ if __name__ == "__main__":
         default="./synthesized",
     )
     parser.add_argument(
-        "-mc" "--pretrained_checkpoint",
+        "-mc",
+        "--pretrained_checkpoint",
         type=str,
         help="Pretrained checkpoint path",
         required=True,
