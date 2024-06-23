@@ -56,7 +56,7 @@ project-root-directory/
 After training the model, we need to build a cache from the dataset for faster data loading during the training process.
 
 ```bash
-python build_data_cache.py -data_dir ./data/librispeech/train-clean
+python build_data_cache.py --data_dir ./data/librispeech/train-clean
 ```
 
 Some important arguments:
