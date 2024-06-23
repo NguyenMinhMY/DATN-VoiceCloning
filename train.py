@@ -5,7 +5,6 @@ import wandb
 import torch
 
 from src.datasets.fastspeech_dataset import FastSpeechDataset
-
 from constant import MODEL_OPTIONS
 
 

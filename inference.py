@@ -1,12 +1,9 @@
 import argparse
 
-import soundfile as sf
-from glob import glob
-
 import torch
 import torchaudio
-from torch.nn import Module
 from numpy import trim_zeros
+import soundfile as sf
 
 from src.utility.tokenizer import ArticulatoryCombinedTextFrontend as Tokenizer
 from src.spk_embedding.StyleEmbedding import StyleEmbedding
@@ -14,7 +11,18 @@ from src.preprocessing.audio_processing import AudioPreprocessor
 from src.tts.vocoders.hifigan.HiFiGAN import HiFiGANGenerator
 from constant import MODEL_OPTIONS
 
-def _inference(text, ref_path, acoustic_model, ap, style_embed_function, vocoder, alpha=1.0, lang="en", device="cpu"):
+
+def _inference(
+    text,
+    ref_path,
+    acoustic_model,
+    ap,
+    style_embed_function,
+    vocoder,
+    alpha=1.0,
+    lang="en",
+    device="cpu",
+):
     wave, sr = sf.read(ref_path)
     norm_wave = ap.audio_to_wave_tensor(normalize=True, audio=wave)
 
@@ -48,6 +56,7 @@ def _inference(text, ref_path, acoustic_model, ap, style_embed_function, vocoder
 
     return waveform
 
+
 def inference(config):
     # Enable GPU if available
     if config.enable_gpu:
@@ -60,12 +69,21 @@ def inference(config):
         device = torch.device("cpu")
 
     # Load audio processor
-    ap = AudioPreprocessor(input_sr=16000, output_sr=16000, melspec_buckets=80,
-        hop_length=256,n_fft=1024,cut_silence=False,device=device)
+    ap = AudioPreprocessor(
+        input_sr=16000,
+        output_sr=16000,
+        melspec_buckets=80,
+        hop_length=256,
+        n_fft=1024,
+        cut_silence=False,
+        device=device,
+    )
 
     # Load checkpoints
     style_embed_function = StyleEmbedding().to(device)
-    style_embed_check_dict = torch.load(config.embedding_function_checkpoint, map_location=device)
+    style_embed_check_dict = torch.load(
+        config.embedding_function_checkpoint, map_location=device
+    )
     style_embed_function.load_state_dict(style_embed_check_dict["style_emb_func"])
     style_embed_function.eval()
     style_embed_function.requires_grad_(False)
@@ -100,6 +118,7 @@ def inference(config):
 
     return waveform
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -131,7 +150,7 @@ if __name__ == "__main__":
         default="output.wav",
     )
     parser.add_argument(
-        "-se",   
+        "-se",
         "--embedding_function_checkpoint",
         type=str,
         help="Style embedding checkpoint path",

@@ -1,8 +1,7 @@
 import os
-
-from glob import glob
 import csv
 import argparse
+from glob import glob
 
 import torch
 import numpy as np
@@ -19,12 +18,17 @@ from src.tts.vocoders.hifigan.HiFiGAN import HiFiGANGenerator
 result_dir = "eval_results"
 os.makedirs(result_dir, exist_ok=True)
 
+
 @torch.no_grad()
 def wer_evaluate(path_to_syn_folder, eval_sentences):
-    asr_model = nemo_asr.models.EncDecCTCModelBPE.from_pretrained(model_name=ASR_CHECKPOINT["wer"])
+    asr_model = nemo_asr.models.EncDecCTCModelBPE.from_pretrained(
+        model_name=ASR_CHECKPOINT["wer"]
+    )
     wer = list()
     for spk_id in os.listdir(path_to_syn_folder):
-        file_paths = [f"{path_to_syn_folder}/{spk_id}/{i}.wav" for i in range(len(eval_sentences))]
+        file_paths = [
+            f"{path_to_syn_folder}/{spk_id}/{i}.wav" for i in range(len(eval_sentences))
+        ]
         transcribes = asr_model.transcribe(file_paths)
         wer.append(nemo_asr.metrics.wer.word_error_rate(transcribes, eval_sentences))
 
@@ -37,33 +41,39 @@ def wer_evaluate(path_to_syn_folder, eval_sentences):
         writer.writerow([wer.mean(), wer.std()])
 
     print("Mean - ", wer.mean(), "\nStd - ", wer.std())
-    
+
     return wer.mean(), wer.std()
+
 
 @torch.no_grad()
 def compute_similarity(speaker_model, X, Y):
     """
-        speaker_model: a speaker label model
-        X: list of paths to audio wav files of speaker 1
-        Y: list of paths to audio wav files of speaker 2 
+    speaker_model: a speaker label model
+    X: list of paths to audio wav files of speaker 1
+    Y: list of paths to audio wav files of speaker 2
     """
     scores = []
-    for x_file, y_file in zip(X,Y):
+    for x_file, y_file in zip(X, Y):
         x = speaker_model.get_embedding(x_file).squeeze()
         y = speaker_model.get_embedding(y_file).squeeze()
         # Length Normalize
         x = x / torch.linalg.norm(x)
         y = y / torch.linalg.norm(y)
         # Score
-        similarity_score = torch.dot(x, y) / ((torch.dot(x, x) * torch.dot(y, y)) ** 0.5) 
+        similarity_score = torch.dot(x, y) / (
+            (torch.dot(x, x) * torch.dot(y, y)) ** 0.5
+        )
         similarity_score = (similarity_score + 1) / 2
         scores.append(similarity_score.item())
-    
+
     return scores
+
 
 @torch.no_grad()
 def secs_evaluate(path_to_syn_folder, path_to_speaker_folder):
-    speaker_model = nemo_asr.models.EncDecSpeakerLabelModel.from_pretrained(ASR_CHECKPOINT["secs"])
+    speaker_model = nemo_asr.models.EncDecSpeakerLabelModel.from_pretrained(
+        ASR_CHECKPOINT["secs"]
+    )
     secs = list()
     for spk_id in os.listdir(path_to_speaker_folder):
         gold_file = glob(os.path.join(path_to_speaker_folder, spk_id) + "/*/*.wav")[0]
@@ -82,16 +92,17 @@ def secs_evaluate(path_to_syn_folder, path_to_speaker_folder):
 
     return np.array(secs).mean(), np.array(secs).std()
 
+
 def _synthesize(
-        model,
-        path_to_eval_speakers: str,
-        path_to_out: str,
-        eval_sentences: list,
-        ap,
-        vocoder,
-        style_embed_function,
-        device="cpu",
-        ):
+    model,
+    path_to_eval_speakers: str,
+    path_to_out: str,
+    eval_sentences: list,
+    ap,
+    vocoder,
+    style_embed_function,
+    device="cpu",
+):
 
     # Synthesize
     for spk_id in tqdm(os.listdir(path_to_eval_speakers)):
@@ -105,13 +116,11 @@ def _synthesize(
                 ap=ap,
                 vocoder=vocoder,
                 style_embed_function=style_embed_function,
-                device=device
-                )
+                device=device,
+            )
             torchaudio.save(
-                f"{path_to_out}/{spk_id}/{sent_id}.wav",
-                src=waveform,
-                sample_rate=24000
-                )
+                f"{path_to_out}/{spk_id}/{sent_id}.wav", src=waveform, sample_rate=24000
+            )
 
 
 def evaluate(config):
@@ -126,12 +135,21 @@ def evaluate(config):
         device = torch.device("cpu")
 
     # Load audio processor
-    ap = AudioPreprocessor(input_sr=16000, output_sr=16000, melspec_buckets=80,
-        hop_length=256,n_fft=1024,cut_silence=False,device=device)
-    
+    ap = AudioPreprocessor(
+        input_sr=16000,
+        output_sr=16000,
+        melspec_buckets=80,
+        hop_length=256,
+        n_fft=1024,
+        cut_silence=False,
+        device=device,
+    )
+
     # Load checkpoints
     style_embed_function = StyleEmbedding().to(device)
-    style_embed_check_dict = torch.load(config.embedding_function_checkpoint, map_location=device)
+    style_embed_check_dict = torch.load(
+        config.embedding_function_checkpoint, map_location=device
+    )
     style_embed_function.load_state_dict(style_embed_check_dict["style_emb_func"])
     style_embed_function.eval()
     style_embed_function.requires_grad_(False)
@@ -140,10 +158,12 @@ def evaluate(config):
     avocodo_check_dict = torch.load(config.avocodo_checkpoint, map_location=device)
     vocoder.load_state_dict(avocodo_check_dict["generator"])
     vocoder.eval()
-    
+
     # Load model
     model = MODEL_OPTIONS[config.model]["model"]().to(config.device)
-    model_check_dict = torch.load(config.pretrained_checkpoint, map_location=config.device)
+    model_check_dict = torch.load(
+        config.pretrained_checkpoint, map_location=config.device
+    )
     model.load_state_dict(model_check_dict["model"])
     model.eval()
     model.requires_grad_(False)
@@ -164,18 +184,19 @@ def evaluate(config):
         ap=ap,
         vocoder=vocoder,
         style_embed_function=style_embed_function,
-        device=device
-        )
+        device=device,
+    )
 
     # Evaluate
     if config.metric == METRIC_OPTIONS["wer"]:
         return wer_evaluate(path_to_syn_folder, eval_sentences)
     elif config.metric == METRIC_OPTIONS["secs"]:
         return secs_evaluate(
-            path_to_syn_folder,
-            path_to_speaker_folder=config.path_to_eval_speakers)
-    
+            path_to_syn_folder, path_to_speaker_folder=config.path_to_eval_speakers
+        )
+
     return
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -190,21 +211,21 @@ if __name__ == "__main__":
         "-me",
         "--metric",
         type=str,
-        help=f"Metric to evaluate, options: {METRIC_OPTIONS.keys()}",  
+        help=f"Metric to evaluate, options: {METRIC_OPTIONS.keys()}",
     )
     parser.add_argument(
         "-pg",
         "--path_to_eval_speakers",
         type=str,
         help="Path to the eval speakers folder",
-        required=True
+        required=True,
     )
     parser.add_argument(
         "-ps",
         "--path_to_eval_sentences",
         type=str,
         help="Path to the eval sentences",
-        required=True
+        required=True,
     )
     parser.add_argument(
         "-o",
@@ -214,14 +235,13 @@ if __name__ == "__main__":
         default="./synthesized",
     )
     parser.add_argument(
-        "-mc"
-        "--pretrained_checkpoint",
+        "-mc" "--pretrained_checkpoint",
         type=str,
         help="Pretrained checkpoint path",
-        required=True
+        required=True,
     )
     parser.add_argument(
-        "-se",   
+        "-se",
         "--embedding_function_checkpoint",
         type=str,
         help="Style embedding checkpoint path",
