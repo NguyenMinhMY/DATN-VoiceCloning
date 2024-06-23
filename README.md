@@ -89,19 +89,45 @@ for more details, using `python train.py -h`
 
 ### Evaluate model
 
-Execute the command below to start app (GPU option):
+Execute the command below to synthesize audios and make evaluation
 
 ```bash
-docker run -d --gpus all -p 8000:5000 iaslab/cssa-gpu
+python evaluation.py --model dgspeech --metric wer --path_to_eval_speakers ./evaluation/wer/audio_samples --path_to_eval_sentences ./evaluation/wer/eval_sentences.txt --pretrained_checkpoint ./weights/checkpoint_models_2024-06-22_13-44-18/checkpoint.pt --enable_gpu
 ```
 
-### Synthesize audio
+The csv file include the result's mean and standard will be generated as name `eval_results/wer_results.csv`
 
-Execute the command below to start app (GPU option):
+Some important arguments:
+
+- `--model` : Name of model to train, options: fastspeech2, dgspeech.
+- `--metric`: Metric for evaluation, options: wer, secs
+- `--path_to_eval_speakers`: path to folder including audios of speakers used to evaluate
+- `--path_to_eval_sentence`: path to txt file of list of sentences
+- `--path_to_out_folder`: path to synthesized output folder, default: ./synthesized
+- `--avocodo_checkpoint`: path to the vocoder checkpoint, default: ./weights/Avocoder.pt
+- `--embedding_function_checkpoint`: Path to the embedding function checkpoint, default: ./weights/embedding_function.pt/
+- `--pretrained_checkpoint`: Path to the model checkpoint, if not provided, the model will be trained from scratch.
+
+### Inference audio
+
+Execute the command below to synthesize audio from an input text and path to a reference audio:
 
 ```bash
-docker run -d --gpus all -p 8000:5000 iaslab/cssa-gpu
+python inference.py --model dgspeech --input_text "Hello world" --ref_path ./data/librispeech/test-clean/61/70968/61-70968-0000.flac --pretrained_checkpoint
 ```
+
+The output file with the name `output.wav` will be generated
+
+Some important arguments:
+
+- `--model` : Name of model to train, options: fastspeech2, dgspeech.
+- `--input_text`: Text to synthesize audio
+- `--ref_path`: path to reference audio
+- `--output_path`: path synthesized audio, default: output.wav
+- `--path_to_out_folder`: path to synthesized output folder, default: ./synthesized
+- `--avocodo_checkpoint`: path to the vocoder checkpoint, default: ./weights/Avocoder.pt
+- `--embedding_function_checkpoint`: Path to the embedding function checkpoint, default: ./weights/embedding_function.pt/
+- `--pretrained_checkpoint`: Path to the model checkpoint, if not provided, the model will be trained from scratch.
 
 ## Model Weights
 
