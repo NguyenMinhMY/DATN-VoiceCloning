@@ -1,5 +1,6 @@
 import os
 import time
+import random
 
 import torch
 import torch.multiprocessing
@@ -15,10 +16,12 @@ from src.utility.warmup_scheduler import WarmupScheduler
 from src.utility.storage_config import MODELS_DIR
 from src.utility.utils import get_most_recent_checkpoint
 from src.utility.utils import clip_grad_norm_
+from src.tts.models.dgspeech.DGSpeech import DGSpeech
+from src.datasets.fastspeech_dataset import FastSpeechDataset
 
 
 def collate_and_pad(batch):
-    # text, text_len, speech, speech_len, durations, energy, pitch, utterance condition, language_id
+    # text, text_len, speech, speech_len, durations, energy, pitch, utterance condition, language_id, speaker_id
     return (
         pad_sequence([datapoint[0] for datapoint in batch], batch_first=True),
         torch.stack([datapoint[1] for datapoint in batch]).squeeze(1),
@@ -29,12 +32,23 @@ def collate_and_pad(batch):
         pad_sequence([datapoint[6] for datapoint in batch], batch_first=True),
         None,
         torch.stack([datapoint[8] for datapoint in batch]),
+        [datapoint[9] for datapoint in batch],
     )
 
 
+def get_random_utterance_conditions(dataset: FastSpeechDataset, spk_ids: list):
+    mels = list()
+    lengths = list()
+    for id in spk_ids:
+        datapoint = random.choice(dataset.datapoints_of_ids[id])
+        mels.append(datapoint[2])
+        lengths.append(datapoint[3])
+    return pad_sequence(mels, batch_first=True), torch.stack(lengths).squeeze(1)
+
+
 def train_loop(
-    net,
-    train_dataset,
+    net: DGSpeech,
+    train_dataset: FastSpeechDataset,
     device,
     save_directory,
     batch_size=32,
@@ -50,6 +64,7 @@ def train_loop(
     phase_2_steps=100000,
     use_wandb=False,
     enable_autocast=True,
+    is_parallel=True,
 ):
     """
     Args:
@@ -70,6 +85,7 @@ def train_loop(
         path_to_embed_model: path to the pretrained embedding function
     """
 
+    print(save_directory)
     os.makedirs(save_directory, exist_ok=True)
 
     steps = phase_1_steps + phase_2_steps
@@ -116,24 +132,44 @@ def train_loop(
     for step_counter in range(step_counter + 1, steps + 1):
         start_time = time.time()
 
-        train_losses_this_epoch = list()
-        l1_losses_this_epoch = list()
-        duration_losses_this_epoch = list()
-        pitch_losses_this_epoch = list()
-        energy_losses_this_epoch = list()
-        cycle_losses_this_epoch = list()
+        epoch_losses = {
+            key: list()
+            for key in [
+                "Train Loss",
+                "Mel Loss",
+                "Glow Loss",
+                "Duration Loss",
+                "Pitch Loss",
+                "Energy Loss",
+                "Cycle Loss",
+            ]
+        }
+
         for batch in tqdm(train_loader):
             with autocast(enabled=enable_autocast, cache_enabled=False):
+                if is_parallel:
+                    batch_of_ref_utterances, batch_of_ref_utterance_lengths = (
+                        batch[2],
+                        batch[3],
+                    )
+                else:
+                    batch_of_ref_utterances, batch_of_ref_utterance_lengths = (
+                        get_random_utterance_conditions(train_dataset, batch[9])
+                    )
+
                 style_embedding_function.eval()
                 style_embedding_of_gold, out_list_gold = style_embedding_function(
-                    batch_of_spectrograms=batch[2].to(device),
-                    batch_of_spectrogram_lengths=batch[3].to(device),
+                    batch_of_spectrograms=batch_of_ref_utterances.to(device),
+                    batch_of_spectrogram_lengths=batch_of_ref_utterance_lengths.to(
+                        device
+                    ),
                     return_all_outs=True,
                 )
                 (
-                    train_loss,
                     output_spectrograms,
-                    l1_loss,
+                    train_loss,
+                    mel_loss,
+                    glow_loss,
                     duration_loss,
                     pitch_loss,
                     energy_loss,
@@ -149,12 +185,13 @@ def train_loop(
                     lang_ids=batch[8].to(device),
                     return_mels=True,
                 )
+
                 style_embedding_function.gst.ref_enc.gst.train()
                 (
                     style_embedding_of_predicted,
                     out_list_predicted,
                 ) = style_embedding_function(
-                    batch_of_spectrograms=output_spectrograms,
+                    batch_of_spectrograms=output_spectrograms.to(device),
                     batch_of_spectrogram_lengths=batch[3].to(device),
                     return_all_outs=True,
                 )
@@ -167,12 +204,13 @@ def train_loop(
                         out_pred, out_gold.detach()
                     )
 
-                train_losses_this_epoch.append(train_loss.item())
-                l1_losses_this_epoch.append(l1_loss.item())
-                duration_losses_this_epoch.append(duration_loss.item())
-                pitch_losses_this_epoch.append(pitch_loss.item())
-                energy_losses_this_epoch.append(energy_loss.item())
-                cycle_losses_this_epoch.append(cycle_dist.item())
+                epoch_losses["Train Loss"].append(train_loss.item())
+                epoch_losses["Mel Loss"].append(mel_loss.item())
+                epoch_losses["Glow Loss"].append(glow_loss.item())
+                epoch_losses["Duration Loss"].append(duration_loss.item())
+                epoch_losses["Pitch Loss"].append(pitch_loss.item())
+                epoch_losses["Energy Loss"].append(energy_loss.item())
+                epoch_losses["Cycle Loss"].append(cycle_dist.item())
 
                 if step_counter <= phase_1_steps:
                     # ===============================================
@@ -198,36 +236,13 @@ def train_loop(
         net.eval()
         style_embedding_function.eval()
 
-        train_loss_epoch = (
-            sum(train_losses_this_epoch) / len(train_losses_this_epoch)
-            if len(train_losses_this_epoch) > 0
-            else 0.0
-        )
-        l1_loss_epoch = (
-            sum(l1_losses_this_epoch) / len(l1_losses_this_epoch)
-            if len(l1_losses_this_epoch) > 0
-            else 0.0
-        )
-        duration_loss_epoch = (
-            sum(duration_losses_this_epoch) / len(duration_losses_this_epoch)
-            if len(duration_losses_this_epoch) > 0
-            else 0.0
-        )
-        pitch_loss_epoch = (
-            sum(pitch_losses_this_epoch) / len(pitch_losses_this_epoch)
-            if len(pitch_losses_this_epoch) > 0
-            else 0.0
-        )
-        energy_loss_epoch = (
-            sum(energy_losses_this_epoch) / len(energy_losses_this_epoch)
-            if len(energy_losses_this_epoch) > 0
-            else 0.0
-        )
-        cycle_loss_epoch = (
-            sum(cycle_losses_this_epoch) / len(cycle_losses_this_epoch)
-            if len(cycle_losses_this_epoch) > 0
-            else 0.0
-        )
+        epoch_loss = {}
+        for key, value in epoch_losses.items():
+            epoch_loss[key] = (
+                sum(epoch_losses[key]) / len(epoch_losses[key])
+                if len(epoch_losses[key]) > 0
+                else 0.0
+            )
 
         if step_counter % steps_per_save == 0 and step_counter != 1:
             default_embedding = style_embedding_function(
@@ -238,8 +253,8 @@ def train_loop(
             ).squeeze()
 
             # Save the best model based on the train loss
-            if train_loss_epoch < best_train_loss:
-                best_train_loss = train_loss_epoch
+            if epoch_loss["Train Loss"] < best_train_loss:
+                best_train_loss = epoch_loss["Train Loss"]
                 torch.save(
                     {
                         "model": net.state_dict(),
@@ -253,8 +268,11 @@ def train_loop(
                 )
 
             # Save the best model based on the cycle loss
-            if cycle_loss_epoch < best_cycle_loss and cycle_loss_epoch != 0.0:
-                best_cycle_loss = cycle_loss_epoch
+            if (
+                epoch_loss["Cycle Loss"] < best_cycle_loss
+                and epoch_loss["Cycle Loss"] != 0.0
+            ):
+                best_cycle_loss = epoch_loss["Cycle Loss"]
                 torch.save(
                     {
                         "model": net.state_dict(),
@@ -283,16 +301,7 @@ def train_loop(
             # delete_old_checkpoints(save_directory, keep=5)
 
         print(f"\nSteps: {step_counter}")
-        print(
-            "Training Loss: {} - L1 Loss: {} - Duration Loss: {} - Pitch Loss: {} - Energy Loss: {} - Cycle Loss: {}".format(
-                train_loss_epoch,
-                l1_loss_epoch,
-                duration_loss_epoch,
-                pitch_loss_epoch,
-                energy_loss_epoch,
-                cycle_loss_epoch,
-            )
-        )
+        print(" - ".join([f"{key}: {value:.3f}" for key, value in epoch_loss.items()]))
 
         print(
             "Time elapsed:  {} Minutes".format(round((time.time() - start_time) / 60))
@@ -301,14 +310,8 @@ def train_loop(
         if use_wandb:
             wandb.log(
                 {
-                    "Training_loss": train_loss_epoch,
-                    "L1_loss": l1_loss_epoch,
-                    "Duration_loss": duration_loss_epoch,
-                    "Pitch_loss": pitch_loss_epoch,
-                    "Energy_loss": energy_loss_epoch,
-                    "Cycle_loss": cycle_loss_epoch,
+                    **epoch_loss,
                     "Steps": step_counter,
-                    # "progress_plot": wandb.Image(path_to_most_recent_plot),
                 }
             )
 

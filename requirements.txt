@@ -23,3 +23,4 @@ dragonmapper~=0.2.6
 auraloss~=0.2.2
 alias_free_torch~=0.0.6
 packaging>=23.1
+nemo_toolkit['all']==1.21.0
