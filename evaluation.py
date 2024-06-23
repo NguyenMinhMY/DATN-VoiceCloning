@@ -248,11 +248,11 @@ if __name__ == "__main__":
         default="./weights/embedding_function.pt",
     )
     parser.add_argument(
-        "-av",
-        "--avocodo_checkpoint",
+        "-v",
+        "--vocoder_checkpoint",
         type=str,
-        help="Avocodo checkpoint path",
-        default="./weights/Avocodo.pt",
+        help="Vocoder checkpoint path",
+        default="./weights/vocoder.pt",
     )
     parser.add_argument(
         "-g",

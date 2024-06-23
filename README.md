@@ -4,14 +4,25 @@ The demand for Text-To-Speech (TTS) technology is increasing with the advancemen
 
 ## Project structure
 
-TODO: viết kĩ model + pipeline
+Here is the complete and organized project structure for this repository:
 
-- `iaslab_*`: source code in this package
-- `conf`: configure files
-- `notebooks`: all notebooks
-- `scripts`: **useful** scripts (.sh, etc.) to run
-- `data`: data description, but actually data is not here (big size, not code)
-- `models`: models, typical is just a links and not push to git
+```bash
+project-root-directory/
+├── data/                  # Includes dataset
+│   ├── librispeech/
+├── evaluation/            # Includes samples for evaluation
+│   └── secs/              # Metrics to evaluate
+│       ├── audio_samples/ # Includes referenced audio
+│       └── eval_sentences.txt # Includes the input text for model evaluation
+├── src/                   # Includes source code for this project
+├── synthesized/           # Path for output synthesized audio folder
+├── weights/               # Includes pre-trained weights and output weights for model
+├── requirements.txt       # Project dependencies
+├── build_data_cache.py
+├── evaluation.py
+├── inference.py
+└── train.py
+```
 
 ## Prerequisite
 
@@ -46,7 +57,7 @@ project-root-directory/
 │       ├── test-clean/
 │       └── train-clean-100/
 └── (other project files)
-...   
+...
 ```
 
 ## Usage
@@ -131,7 +142,10 @@ Some important arguments:
 
 ## Model Weights
 
-TODO: weights
+| Model       | Training Details                              | Download Link                                                                                                   |
+| ----------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Fastspeech2 | 10 epochs for phase 1, 190 epochs for phase 2 | [Download](https://www.kaggle.com/datasets/hung1578/voice-cloning-thesis-2024-checkpoint?select=fastspeech2.pt) |
+| DGSpeech    | 200 epochs for phase 1                        | [Download](https://www.kaggle.com/datasets/hung1578/voice-cloning-thesis-2024-checkpoint?select=dgspeech.pt)    |
 
 ## References
 
