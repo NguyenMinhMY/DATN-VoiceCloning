@@ -89,8 +89,8 @@ def inference(config):
     style_embed_function.requires_grad_(False)
 
     vocoder = HiFiGANGenerator().to(device)
-    avocodo_check_dict = torch.load(config.avocodo_checkpoint, map_location=device)
-    vocoder.load_state_dict(avocodo_check_dict["generator"])
+    vocoder_check_dict = torch.load(config.vocoder_checkpoint, map_location=device)
+    vocoder.load_state_dict(vocoder_check_dict["generator"])
     vocoder.eval()
 
     # Load model
@@ -148,6 +148,13 @@ if __name__ == "__main__":
         type=str,
         help="Output path",
         default="output.wav",
+    )
+    parser.add_argument(
+        "-mc",
+        "--pretrained_checkpoint",
+        type=str,
+        help="Path to the model checkpoint, if not provided, the model will be trained from scratch",
+        default=None,
     )
     parser.add_argument(
         "-se",
