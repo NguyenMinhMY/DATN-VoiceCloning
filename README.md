@@ -132,3 +132,14 @@ Some important arguments:
 ## Model Weights
 
 TODO: weights
+
+## References
+
+This project incorporates code and model weights from the following sources:
+
+1. **IMS-Toucan**: The code and model weights for [IMS-Toucan](https://github.com/DigitalPhonetics/IMS-Toucan) were used in this project. IMS-Toucan is a high-quality text-to-speech synthesis system developed by the Institute for Natural Language Processing (IMS) at the University of Stuttgart. The specific model's weights utilized are the vocoder, aligner, and embedding function.
+
+   - Repository: [DigitalPhonetics/IMS-Toucan](https://github.com/DigitalPhonetics/IMS-Toucan)
+   - License: [MIT License](https://github.com/DigitalPhonetics/IMS-Toucan/blob/master/LICENSE)
+
+Please ensure you comply with the licensing terms provided in the IMS-Toucan repository when using their code and models.
